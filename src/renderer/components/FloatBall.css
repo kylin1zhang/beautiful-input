@@ -20,25 +20,25 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  /* 移除 box-shadow 以避免方形边框 */
+  box-shadow: none;
+  transition: transform 0.2s ease;
   user-select: none;
   /* 启用系统级拖动 */
   -webkit-app-region: drag;
   cursor: grab;
-}
-
-.float-ball:active {
-  cursor: grabbing;
+  /* 确保背景完全透明，不显示任何边框 */
+  border: none;
+  outline: none;
 }
 
 .float-ball:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
 }
 
 .float-ball:active {
   transform: scale(0.95);
+  cursor: grabbing;
 }
 
 .float-ball-icon {
@@ -48,15 +48,6 @@ body {
   /* 图标区域可点击，使用 pointer-events 确保事件响应 */
   -webkit-app-region: no-drag;
   pointer-events: none;
-}
-
-.float-ball:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-}
-
-.float-ball:active {
-  transform: scale(0.95);
 }
 
 .float-ball-icon.recording {
@@ -151,18 +142,22 @@ body {
 /* 错误提示 */
 .error-tooltip {
   position: absolute;
-  bottom: -50px;
+  bottom: -60px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(245, 158, 11, 0.95);
+  background: rgba(239, 68, 68, 0.95);
   color: white;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
-  max-width: 200px;
+  max-width: 300px;
   text-align: center;
   animation: slideIn 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  line-height: 1.4;
 }
 
 @keyframes slideIn {

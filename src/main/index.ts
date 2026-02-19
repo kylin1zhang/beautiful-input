@@ -258,10 +258,18 @@ async function startRecording(): Promise<void> {
     // 检查权限
     const hasPermission = await recordingModule.checkPermission()
     if (!hasPermission) {
+      floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+        status: 'error'
+      })
       floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
         type: 'PERMISSION_DENIED',
-        message: '请允许 Typeless 访问麦克风'
+        message: '请允许 BeautifulInput 访问麦克风'
       })
+      setTimeout(() => {
+        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+          status: 'idle'
+        })
+      }, 3000)
       return
     }
 
@@ -331,12 +339,17 @@ async function stopRecording(): Promise<void> {
     // 检查录音时长
     if (currentRecordingDuration < 1) {
       floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-        status: 'idle'
+        status: 'error'
       })
       floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
         type: 'AUDIO_ERROR',
-        message: '录音时间太短'
+        message: '录音时间太短，请至少说话1秒'
       })
+      setTimeout(() => {
+        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+          status: 'idle'
+        })
+      }, 3000)
       return
     }
 
@@ -422,15 +435,40 @@ async function stopRecording(): Promise<void> {
     console.error('[Main] 处理失败:', error)
     isRecording = false
 
+    // 先发送错误状态，确保能显示错误图标
     floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-      status: 'idle'
+      status: 'error'
     })
+
+    // 构建清晰的错误消息
+    let errorMessage = '处理失败'
+    const errorObj = error as Error
+
+    if (errorObj.message) {
+      // 根据错误类型提供更友好的提示
+      if (errorObj.message.includes('未配置') || errorObj.message.includes('API Key')) {
+        errorMessage = '请先在设置中配置 API Key'
+      } else if (errorObj.message.includes('网络') || errorObj.message.includes('fetch')) {
+        errorMessage = '网络连接失败，请检查网络'
+      } else if (errorObj.message.includes('识别') || errorObj.message.includes('转录')) {
+        errorMessage = '语音识别失败，请重试'
+      } else {
+        errorMessage = errorObj.message
+      }
+    }
 
     floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
       type: 'UNKNOWN_ERROR',
-      message: '处理失败',
-      details: (error as Error).message
+      message: errorMessage,
+      details: errorObj.message
     })
+
+    // 3秒后恢复空闲状态
+    setTimeout(() => {
+      floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+        status: 'idle'
+      })
+    }, 3000)
   }
 }
 
