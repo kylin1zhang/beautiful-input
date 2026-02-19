@@ -302,7 +302,9 @@ const Settings: React.FC = () => {
                 </button>
                 <button
                   className="input-action test-btn"
-                  onClick={() => testApiKey('qwen')}
+                  onClick={() => {
+                    showMessage('success', '测试功能开发中')
+                  }}
                 >
                   测试
                 </button>
@@ -337,7 +339,7 @@ const Settings: React.FC = () => {
           <div className="settings-section">
             <h2>快捷键设置</h2>
             <p className="section-description">
-              自定义全局快捷键，修改后需要重启应用生效
+              自定义全局快捷键，修改后立即生效
             </p>
 
             <div className="form-group">
@@ -388,6 +390,61 @@ const Settings: React.FC = () => {
         {activeTab === 'personalization' && (
           <div className="settings-section">
             <h2>个性化设置</h2>
+
+            {/* AI 助手默认动作 */}
+            <div className="form-group">
+              <label>
+                <Volume2 className="label-icon" />
+                AI 助手默认动作
+              </label>
+              <select
+                value={settings.aiAssistantAction}
+                onChange={e => updateSetting('aiAssistantAction', e.target.value as 'summarize' | 'explain' | 'expand')}
+              >
+                <option value="summarize">总结</option>
+                <option value="explain">解释</option>
+                <option value="expand">扩写</option>
+              </select>
+              <span className="help-text">
+                使用快捷键调用 AI 助手时的默认处理方式
+              </span>
+            </div>
+
+            {/* 自动停止录音 */}
+            <div className="form-group checkbox">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.autoStopRecording.enabled}
+                  onChange={e => updateSetting('autoStopRecording', { ...settings.autoStopRecording, enabled: e.target.checked })}
+                />
+                启用自动停止录音（静音检测）
+              </label>
+              <span className="help-text">
+                检测到静音时自动停止录音
+              </span>
+            </div>
+
+            {/* 静音持续时间设置 */}
+            {settings.autoStopRecording.enabled && (
+              <div className="form-group">
+                <label>
+                  <Volume2 className="label-icon" />
+                  静音持续时间 (毫秒)
+                </label>
+                <input
+                  type="number"
+                  min="1000"
+                  max="30000"
+                  step="500"
+                  value={settings.autoStopRecording.vadSilenceDuration}
+                  onChange={e => updateSetting('autoStopRecording', { ...settings.autoStopRecording, vadSilenceDuration: parseInt(e.target.value) || 5000 })}
+                />
+                <span className="help-text">
+                  检测到静音后，持续此时间将自动停止录音 (1000-30000 毫秒)
+                </span>
+              </div>
+            )}
 
             {/* 语调风格 */}
             <div className="form-group">

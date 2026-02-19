@@ -167,7 +167,7 @@ function createHistoryWindow(): BrowserWindow {
 /**
  * 获取应用图标
  */
-function getAppIcon(): nativeImage {
+function getAppIcon(): ReturnType<typeof nativeImage.createFromPath> {
   const iconPath = join(__dirname, '../../resources/icon.png')
   return nativeImage.createFromPath(iconPath)
 }
@@ -283,10 +283,30 @@ async function startRecording(): Promise<void> {
       return
     }
 
-    // 开始录音
-    await recordingModule.startRecording()
+    // 获取设置（用于自动停止配置）
+    const settings = settingsModule.getSettings()
+
+    // 获取自动停止配置
+    const autoStopConfig = settings.autoStopRecording || { enabled: false, vadSilenceDuration: 5000 }
+    const enableVAD = autoStopConfig.enabled
+
+    // 开始录音（传入自动停止配置）
+    await recordingModule.startRecording({
+      enableVAD,
+      vadSilenceDuration: autoStopConfig.vadSilenceDuration
+    })
     isRecording = true
     currentRecordingDuration = 0
+
+    // 监听自动停止事件
+    if (enableVAD) {
+      recordingModule.once('auto-stop', ({ reason }) => {
+        console.log('[Main] 自动停止触发，原因:', reason)
+        if (isRecording) {
+          stopRecording()
+        }
+      })
+    }
 
     // 更新悬浮球状态
     floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
@@ -532,6 +552,174 @@ async function stopRecording(): Promise<void> {
 }
 
 /**
+ * 快速翻译功能
+ */
+async function quickTranslate(): Promise<void> {
+  try {
+    const { clipboard } = require('electron')
+    const text = clipboard.readText()
+
+    if (!text || text.trim().length === 0) {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: '剪贴板为空，请先复制要翻译的文本',
+          icon: getAppIcon()
+        }).show()
+      }
+      return
+    }
+
+    console.log('[Main] 快速翻译，文本:', text.substring(0, 50) + '...')
+
+    // 更新悬浮球状态
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'processing'
+    })
+
+    const settings = settingsModule.getSettings()
+    // 根据选择的 AI 服务提供商获取对应的 API Key
+    const aiProvider = settings.aiProvider || 'deepseek'
+    const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
+
+    if (!apiKey) {
+      const providerName = aiProvider === 'qwen' ? '千问' : 'DeepSeek'
+      throw new Error(`请先在设置中配置 ${providerName} API Key`)
+    }
+
+    const result = await aiProcessorModule.translate(
+      text,
+      settings.defaultLanguage === 'zh-CN' ? 'en' : 'zh-CN',
+      apiKey
+    )
+
+    if (!result.success || !result.result) {
+      throw new Error(result.error || '翻译失败')
+    }
+
+    // 模拟输入翻译结果
+    const inputSuccess = await inputSimulatorModule.typeText(result.result)
+
+    if (!inputSuccess) {
+      clipboard.writeText(result.result)
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: '翻译结果已复制到剪贴板',
+          icon: getAppIcon()
+        }).show()
+      }
+    }
+
+    // 恢复空闲状态
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'idle'
+    })
+
+    console.log('[Main] 快速翻译完成')
+  } catch (error) {
+    console.error('[Main] 快速翻译失败:', error)
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'idle'
+    })
+
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'BeautifulInput 错误',
+        body: '翻译失败: ' + (error as Error).message,
+        icon: getAppIcon()
+      }).show()
+    }
+  }
+}
+
+/**
+ * AI 助手功能
+ */
+async function aiAssistant(): Promise<void> {
+  try {
+    const { clipboard } = require('electron')
+    const text = clipboard.readText()
+
+    if (!text || text.trim().length === 0) {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: '剪贴板为空，请先复制要处理的文本',
+          icon: getAppIcon()
+        }).show()
+      }
+      return
+    }
+
+    console.log('[Main] AI 助手，文本:', text.substring(0, 50) + '...')
+
+    // 更新悬浮球状态
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'processing'
+    })
+
+    const settings = settingsModule.getSettings()
+    const action = settings.aiAssistantAction || 'summarize'
+
+    // 根据选择的 AI 服务提供商获取对应的 API Key
+    const aiProvider = settings.aiProvider || 'deepseek'
+    const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
+
+    if (!apiKey) {
+      const providerName = aiProvider === 'qwen' ? '千问' : 'DeepSeek'
+      throw new Error(`请先在设置中配置 ${providerName} API Key`)
+    }
+
+    const result = await aiProcessorModule.process(
+      text,
+      'assistant',
+      apiKey,
+      settings.toneStyle,
+      action
+    )
+
+    if (!result.success || !result.result) {
+      throw new Error(result.error || 'AI 处理失败')
+    }
+
+    // 模拟输入处理结果
+    const inputSuccess = await inputSimulatorModule.typeText(result.result)
+
+    if (!inputSuccess) {
+      clipboard.writeText(result.result)
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: '处理结果已复制到剪贴板',
+          icon: getAppIcon()
+        }).show()
+      }
+    }
+
+    // 恢复空闲状态
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'idle'
+    })
+
+    console.log('[Main] AI 助手完成')
+  } catch (error) {
+    console.error('[Main] AI 助手失败:', error)
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'idle'
+    })
+
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'BeautifulInput 错误',
+        body: 'AI 处理失败: ' + (error as Error).message,
+        icon: getAppIcon()
+      }).show()
+    }
+  }
+}
+
+/**
  * 注册 IPC 处理器
  */
 function registerIpcHandlers(): void {
@@ -549,7 +737,9 @@ function registerIpcHandlers(): void {
     // 重新注册快捷键
     shortcutsModule.unregisterAll()
     shortcutsModule.registerAll(settingsModule.getSettings().shortcuts, {
-      toggleRecording
+      toggleRecording,
+      quickTranslate,
+      aiAssistant
     })
     // 通知所有窗口设置已更新
     if (floatWindow && !floatWindow.isDestroyed()) {
@@ -665,7 +855,9 @@ app.whenReady().then(async () => {
   // 注册全局快捷键
   const settings = settingsModule.getSettings()
   shortcutsModule.registerAll(settings.shortcuts, {
-    toggleRecording
+    toggleRecording,
+    quickTranslate,
+    aiAssistant
   })
 
   // 默认打开开发工具（开发模式）

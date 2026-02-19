@@ -46,6 +46,15 @@ export interface UserSettings {
   // 功能开关
   enableTranslation: boolean
   enableAiAssistant: boolean
+
+  // AI 助手默认动作
+  aiAssistantAction: 'summarize' | 'explain' | 'expand'
+
+  // 自动停止录音配置
+  autoStopRecording: {
+    enabled: boolean
+    vadSilenceDuration: number // 毫秒
+  }
 }
 
 // 默认设置
@@ -55,9 +64,9 @@ export const defaultSettings: UserSettings = {
   qwenApiKey: '',
   aiProvider: 'deepseek',
   shortcuts: {
-    toggleRecording: 'CommandOrControl+Shift+R',
-    quickTranslate: 'CommandOrControl+Shift+T',
-    aiAssistant: 'CommandOrControl+Shift+A'
+    toggleRecording: 'Alt+Shift+R',
+    quickTranslate: 'Alt+Shift+T',
+    aiAssistant: 'Alt+Shift+A'
   },
   toneStyle: 'professional',
   personalDictionary: [],
@@ -66,7 +75,12 @@ export const defaultSettings: UserSettings = {
   floatOpacity: 0.9,
   historyRetentionDays: 30,
   enableTranslation: false,
-  enableAiAssistant: false
+  enableAiAssistant: false,
+  aiAssistantAction: 'summarize',
+  autoStopRecording: {
+    enabled: true,
+    vadSilenceDuration: 5000
+  }
 }
 
 // 历史记录项

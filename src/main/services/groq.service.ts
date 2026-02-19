@@ -47,7 +47,7 @@ export class GroqService {
 
     try {
       // 创建 Blob
-      const blob = new Blob([audioBuffer], { type: 'audio/wav' }
+      const blob = new Blob([audioBuffer], { type: 'audio/wav' })
 
       // 创建文件对象
       const file = new File([blob], 'recording.wav', { type: 'audio/wav' })

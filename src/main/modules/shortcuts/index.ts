@@ -52,8 +52,13 @@ export class ShortcutsModule extends EventEmitter {
 
       // 注册快捷键
       const success = globalShortcut.register(normalizedShortcut, () => {
-        console.log(`[Shortcuts] 触发快捷键: ${name} (${shortcut})`)
-        handler()
+        console.log(`[Shortcuts] === 触发快捷键: ${name} (${shortcut}) ===`)
+        try {
+          handler()
+          console.log(`[Shortcuts] === 快捷键 ${name} 处理完成 ===`)
+        } catch (error) {
+          console.error(`[Shortcuts] === 快捷键 ${name} 处理错误:`, error)
+        }
       })
 
       if (success) {

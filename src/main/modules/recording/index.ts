@@ -4,6 +4,7 @@ import { platform } from 'os'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { VADModule } from '../vad/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -19,6 +20,7 @@ export class RecordingModule extends EventEmitter {
   private audioChunks: Buffer[] = []
   private isRecording = false
   private options: Required<RecordingOptions>
+  private vadModule: VADModule | null = null
 
   constructor(options: RecordingOptions = {}) {
     super()
@@ -110,7 +112,10 @@ export class RecordingModule extends EventEmitter {
   /**
    * 开始录音
    */
-  async startRecording(): Promise<void> {
+  async startRecording(autoStopOptions?: {
+    enableVAD: boolean
+    vadSilenceDuration: number
+  }): Promise<void> {
     if (this.isRecording) {
       throw new Error('正在录音中')
     }
@@ -118,6 +123,20 @@ export class RecordingModule extends EventEmitter {
     const os = platform()
     this.audioChunks = []
     this.isRecording = true
+
+    // 初始化 VAD 模块
+    if (autoStopOptions?.enableVAD) {
+      this.vadModule = new VADModule({
+        silenceThreshold: 0.04,
+        silenceDuration: autoStopOptions.vadSilenceDuration,
+        minRecordingDuration: 3000
+      })
+      this.vadModule.on('silence-detected', () => {
+        console.log('[Recording] VAD 检测到静音，触发自动停止')
+        this.emit('auto-stop', { reason: 'vad' })
+      })
+      this.vadModule.start()
+    }
 
     try {
       if (os === 'darwin') {
@@ -271,6 +290,11 @@ export class RecordingModule extends EventEmitter {
     this.recordingProcess.stdout?.on('data', (chunk: Buffer) => {
       this.audioChunks.push(chunk)
       this.emit('data', chunk)
+
+      // 如果启用了 VAD，持续处理音频数据
+      if (this.vadModule) {
+        this.vadModule.process(chunk)
+      }
     })
 
     this.recordingProcess.stderr?.on('data', (data: Buffer) => {
@@ -369,6 +393,10 @@ export class RecordingModule extends EventEmitter {
   destroy(): void {
     if (this.recordingProcess && !this.recordingProcess.killed) {
       this.recordingProcess.kill('SIGKILL')
+    }
+    if (this.vadModule) {
+      this.vadModule.removeAllListeners()
+      this.vadModule = null
     }
     this.removeAllListeners()
   }
