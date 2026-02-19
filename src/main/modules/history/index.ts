@@ -183,7 +183,7 @@ export class HistoryModule extends EventEmitter {
     const defaultPath = join(
       require('os').homedir(),
       'Downloads',
-      `typeless-history-${timestamp}.${format}`
+      `beautiful-input-history-${timestamp}.${format}`
     )
 
     const { filePath } = await dialog.showSaveDialog({

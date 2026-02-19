@@ -64,7 +64,7 @@ export const UI_CONFIG = {
 export const ERROR_MESSAGES = {
   PERMISSION_DENIED: {
     title: '权限不足',
-    message: '请允许 Typeless 访问麦克风和辅助功能',
+    message: '请允许 BeautifulInput 访问麦克风和辅助功能',
     action: '打开系统设置'
   },
   NETWORK_ERROR: {
@@ -228,18 +228,18 @@ export const TONE_STYLES = [
 
 // 存储键名
 export const STORAGE_KEYS = {
-  SETTINGS: 'typeless-settings',
-  HISTORY: 'typeless-history',
-  FLOAT_POSITION: 'typeless-float-position',
-  FIRST_RUN: 'typeless-first-run'
+  SETTINGS: 'beautiful-input-settings',
+  HISTORY: 'beautiful-input-history',
+  FLOAT_POSITION: 'beautiful-input-float-position',
+  FIRST_RUN: 'beautiful-input-first-run'
 } as const
 
 // 应用信息
 export const APP_INFO = {
-  NAME: 'Typeless',
+  NAME: 'BeautifulInput',
   VERSION: '1.0.0',
   DESCRIPTION: 'AI语音输入工具',
-  AUTHOR: 'Typeless Team',
-  WEBSITE: 'https://typeless.app',
-  GITHUB: 'https://github.com/typeless-app/typeless'
+  AUTHOR: 'BeautifulInput Team',
+  WEBSITE: 'https://beautifulinput.app',
+  GITHUB: 'https://github.com/beautifulinput/beautifulinput'
 } as const

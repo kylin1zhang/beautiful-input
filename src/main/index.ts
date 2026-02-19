@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, shell, Notification } from 'electron'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
@@ -56,6 +56,7 @@ function createFloatWindow(): BrowserWindow {
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
+    focusable: false, // 关键：让窗口不获取焦点，这样点击后不会让其他应用失去焦点
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
       sandbox: false,
@@ -105,7 +106,7 @@ function createSettingsWindow(): BrowserWindow {
     height: 750,
     minWidth: 550,
     minHeight: 600,
-    title: 'Typeless 设置',
+    title: 'BeautifulInput 设置',
     icon: getAppIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
@@ -141,7 +142,7 @@ function createHistoryWindow(): BrowserWindow {
     height: 700,
     minWidth: 700,
     minHeight: 500,
-    title: 'Typeless 历史记录',
+    title: 'BeautifulInput 历史记录',
     icon: getAppIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
@@ -258,13 +259,22 @@ async function startRecording(): Promise<void> {
     // 检查权限
     const hasPermission = await recordingModule.checkPermission()
     if (!hasPermission) {
+      const errorMsg = '请允许 BeautifulInput 访问麦克风'
       floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
         status: 'error'
       })
       floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
         type: 'PERMISSION_DENIED',
-        message: '请允许 BeautifulInput 访问麦克风'
+        message: errorMsg
       })
+      // 显示系统通知
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 错误',
+          body: errorMsg,
+          icon: getAppIcon()
+        }).show()
+      }
       setTimeout(() => {
         floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
           status: 'idle'
@@ -306,11 +316,20 @@ async function startRecording(): Promise<void> {
       clearInterval(recordingTimer)
       recordingTimer = null
     }
+    const errorMsg = '开始录音失败'
     floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
       type: 'AUDIO_ERROR',
-      message: '开始录音失败',
+      message: errorMsg,
       details: (error as Error).message
     })
+    // 显示系统通知
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'BeautifulInput 错误',
+        body: errorMsg,
+        icon: getAppIcon()
+      }).show()
+    }
   }
 }
 
@@ -338,13 +357,22 @@ async function stopRecording(): Promise<void> {
 
     // 检查录音时长
     if (currentRecordingDuration < 1) {
+      const errorMsg = '录音时间太短，请至少说话1秒'
       floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
         status: 'error'
       })
       floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
         type: 'AUDIO_ERROR',
-        message: '录音时间太短，请至少说话1秒'
+        message: errorMsg
       })
+      // 显示系统通知
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: errorMsg,
+          icon: getAppIcon()
+        }).show()
+      }
       setTimeout(() => {
         floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
           status: 'idle'
@@ -357,7 +385,12 @@ async function stopRecording(): Promise<void> {
 
     // 语音识别
     const settings = settingsModule.getSettings()
-    console.log('[Main] Groq API Key 配置状态:', settings.groqApiKey ? `已配置 (${settings.groqApiKey.substring(0, 10)}...)` : '未配置')
+    console.log('[Main] 当前设置:', JSON.stringify({
+      groqApiKey: settings.groqApiKey ? `已配置 (${settings.groqApiKey.substring(0, 10)}...)` : '未配置',
+      deepseekApiKey: settings.deepseekApiKey ? `已配置 (${settings.deepseekApiKey.substring(0, 10)}...)` : '未配置',
+      qwenApiKey: settings.qwenApiKey ? `已配置 (${settings.qwenApiKey.substring(0, 10)}...)` : '未配置',
+      aiProvider: settings.aiProvider
+    }))
 
     const transcriptionResult = await transcriptionModule.transcribe(
       audioBuffer,
@@ -376,6 +409,7 @@ async function stopRecording(): Promise<void> {
     const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
 
     console.log('[Main] AI 服务提供商:', aiProvider)
+    console.log('[Main] 使用的 API Key:', aiProvider === 'qwen' ? 'qwenApiKey' : 'deepseekApiKey')
     console.log('[Main] API Key 配置状态:', apiKey ? `已配置 (${apiKey.substring(0, 10)}...)` : '未配置')
 
     const processedResult = await aiProcessorModule.process(
@@ -398,12 +432,21 @@ async function stopRecording(): Promise<void> {
 
     if (!inputSuccess) {
       // 输入失败，复制到剪贴板
+      const errorMsg = '无法输入到当前应用，已复制到剪贴板'
       const { clipboard } = require('electron')
       clipboard.writeText(processedResult.result)
       floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
         type: 'INPUT_ERROR',
-        message: '无法输入到当前应用，已复制到剪贴板'
+        message: errorMsg
       })
+      // 显示系统通知
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: errorMsg,
+          icon: getAppIcon()
+        }).show()
+      }
     }
 
     // 保存到历史记录
@@ -446,7 +489,13 @@ async function stopRecording(): Promise<void> {
 
     if (errorObj.message) {
       // 根据错误类型提供更友好的提示
-      if (errorObj.message.includes('未配置') || errorObj.message.includes('API Key')) {
+      if (errorObj.message.includes('千问') || errorObj.message.includes('qwen')) {
+        errorMessage = '请先在设置中配置 千问 API Key'
+      } else if (errorObj.message.includes('DeepSeek') || errorObj.message.includes('deepseek')) {
+        errorMessage = '请先在设置中配置 DeepSeek API Key'
+      } else if (errorObj.message.includes('Groq') || errorObj.message.includes('groq')) {
+        errorMessage = '请先在设置中配置 Groq API Key（用于语音识别）'
+      } else if (errorObj.message.includes('未配置') || errorObj.message.includes('API Key')) {
         errorMessage = '请先在设置中配置 API Key'
       } else if (errorObj.message.includes('网络') || errorObj.message.includes('fetch')) {
         errorMessage = '网络连接失败，请检查网络'
@@ -457,11 +506,21 @@ async function stopRecording(): Promise<void> {
       }
     }
 
+    // 发送错误消息到悬浮球
     floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
       type: 'UNKNOWN_ERROR',
       message: errorMessage,
       details: errorObj.message
     })
+
+    // 显示系统通知，确保用户能看到错误
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'BeautifulInput 错误',
+        body: errorMessage,
+        icon: getAppIcon()
+      }).show()
+    }
 
     // 3秒后恢复空闲状态
     setTimeout(() => {
@@ -615,7 +674,7 @@ app.whenReady().then(async () => {
   //   floatWindow.webContents.openDevTools({ mode: 'detach' })
   // }
 
-  console.log('[Main] Typeless 已启动')
+  console.log('[Main] BeautifulInput 已启动')
 })
 
 /**

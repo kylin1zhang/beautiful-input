@@ -20,7 +20,7 @@ const App: React.FC = () => {
         fontWeight: 'bold',
         marginBottom: '20px'
       }}>
-        Typeless
+        BeautifulInput
       </h1>
       <p style={{
         fontSize: '20px',

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels, UserSettings, HistoryItem, FloatPosition } from '@shared/types'
 
 // API 类型定义
-interface TypelessAPI {
+interface BeautifulInputAPI {
   // 录音控制
   startRecording: () => Promise<void>
   stopRecording: () => Promise<void>
@@ -72,7 +72,7 @@ interface TypelessAPI {
 }
 
 // 暴露 API 到渲染进程
-const api: TypelessAPI = {
+const api: BeautifulInputAPI = {
   // 录音控制
   startRecording: () => ipcRenderer.invoke(IpcChannels.START_RECORDING),
   stopRecording: () => ipcRenderer.invoke(IpcChannels.STOP_RECORDING),
@@ -143,6 +143,6 @@ console.log('[Preload] electronAPI exposed to window')
 // 类型声明
 declare global {
   interface Window {
-    electronAPI: TypelessAPI
+    electronAPI: BeautifulInputAPI
   }
 }

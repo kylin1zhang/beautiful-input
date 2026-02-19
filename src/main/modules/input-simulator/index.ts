@@ -193,42 +193,108 @@ export class InputSimulatorModule extends EventEmitter {
   }
 
   /**
-   * 使用剪贴板输入
+   * 使用剪贴板输入（针对 Word 优化的版本）
    */
   private async typeWithClipboard(text: string): Promise<boolean> {
-    // 保存原始剪贴板内容
+    console.log('[Input Simulator] 开始剪贴板输入，文本长度:', text.length)
     const originalClipboard = clipboard.readText()
+    console.log('[Input Simulator] 原始剪贴板内容长度:', originalClipboard.length)
 
     try {
+      // 保存剪贴板历史（用于后续恢复）
+      const clipboardHistory: string[] = [originalClipboard]
+
       // 写入文本到剪贴板
       clipboard.writeText(text)
+      console.log('[Input Simulator] 已写入新文本到剪贴板')
 
-      // 模拟粘贴快捷键
-      if (platform() === 'darwin') {
+      // 验证剪贴板内容
+      const verifyClipboard = clipboard.readText()
+      console.log('[Input Simulator] 验证剪贴板内容:', verifyClipboard.substring(0, 20) + '...')
+
+      // 等待剪贴板写入完成
+      await new Promise(resolve => setTimeout(resolve, 150))
+
+      // Windows 平台使用多种方法确保粘贴
+      if (platform() === 'win32') {
+        const { execSync } = require('child_process')
+        let pasteSuccess = false
+
+        // 方法1: 使用 PowerShell VBScript SendKeys（最可靠）
+        try {
+          console.log('[Input Simulator] 尝试方法1: PowerShell SendKeys')
+          execSync('powershell -Command "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys(\'^(v)\')"', { timeout: 2000 })
+          console.log('[Input Simulator] PowerShell SendKeys 执行成功')
+          pasteSuccess = true
+        } catch (err) {
+          console.log('[Input Simulator] PowerShell SendKeys 失败:', err)
+        }
+
+        // 方法2: 如果方法1失败，尝试 nut-js
+        if (!pasteSuccess && this.nut) {
+          try {
+            console.log('[Input Simulator] 尝试方法2: nut-js 模拟 Ctrl+V')
+            const { Key, keyboard } = this.nut
+            // 添加延迟确保焦点正确
+            await this.nut.sleep(100)
+            await keyboard.type(Key.LeftControl, Key.V)
+            console.log('[Input Simulator] nut-js 模拟成功')
+            pasteSuccess = true
+          } catch (err) {
+            console.log('[Input Simulator] nut-js 模拟失败:', err)
+          }
+        }
+
+        // 方法3: 如果前两种方法都失败，尝试 mshta
+        if (!pasteSuccess) {
+          try {
+            console.log('[Input Simulator] 尝试方法3: mshta VBScript')
+            execSync('mshta vbscript:ExecuteCode("Set WShell=CreateObject(\"\"WScript.Shell\"\"):WShell.SendKeys \"\"^v\"\":self.close\"\"\")', { timeout: 2000 })
+            console.log('[Input Simulator] mshta 执行成功')
+            pasteSuccess = true
+          } catch (err) {
+            console.log('[Input Simulator] mshta 失败:', err)
+          }
+        }
+
+        if (!pasteSuccess) {
+          console.log('[Input Simulator] 所有粘贴方法均失败')
+          return false
+        }
+      } else if (platform() === 'darwin') {
         // macOS: Command + V
-        const { exec } = require('child_process')
-        exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'')
-      } else if (platform() === 'win32') {
-        // Windows: Ctrl + V
-        const { exec } = require('child_process')
-        exec('powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys(\'^v\')"')
+        const { execSync } = require('child_process')
+        execSync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'')
       } else {
         // Linux: Ctrl + V
-        const { exec } = require('child_process')
-        exec('xdotool key ctrl+v')
+        const { execSync } = require('child_process')
+        execSync('xdotool key ctrl+v')
       }
 
-      // 等待粘贴完成（增加到 300ms 确保 PowerShell 命令执行完成）
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // 关键修复：等待更长时间确保粘贴完成（Word 可能需要更长时间）
+      console.log('[Input Simulator] 等待粘贴操作完成...')
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
+      // 验证剪贴板内容（不作为成功/失败的判断标准）
+      const afterPasteClipboard = clipboard.readText()
+      console.log('[Input Simulator] 粘贴后剪贴板内容:', afterPasteClipboard.substring(0, 20) + '...')
+
+      console.log('[Input Simulator] 剪贴板输入完成')
       return true
     } catch (error) {
       console.error('[Input Simulator] 剪贴板输入失败:', error)
       return false
     } finally {
-      // **修复：同步恢复剪贴板，不再使用 setTimeout**
-      // 使用 setTimeout 会导致恢复时机不可控
+      // 关键修复：延迟更长时间再恢复剪贴板
+      // Windows 剪贴板历史功能可能需要更长时间
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // 恢复原始剪贴板
       clipboard.writeText(originalClipboard)
+      console.log('[Input Simulator] 已恢复原始剪贴板')
+
+      // 额外等待确保恢复操作完成
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
   }
 

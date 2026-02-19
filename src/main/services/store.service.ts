@@ -14,7 +14,7 @@ export class StoreService {
 
   constructor() {
     this.store = new Store<StoreSchema>({
-      name: 'typeless-store',
+      name: 'beautiful-input-store',
       defaults: {
         settings: defaultSettings,
         history: [],
@@ -22,7 +22,7 @@ export class StoreService {
         firstRun: true
       },
       // 加密敏感数据
-      encryptionKey: 'typeless-secure-store-key',
+      encryptionKey: 'beautiful-input-secure-store-key',
       // 数据迁移
       migrations: {
         '>=1.0.0': (store) => {

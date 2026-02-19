@@ -128,7 +128,7 @@ const Settings: React.FC = () => {
       <div className="settings-header">
         <h1>
           <Settings2 className="header-icon" />
-          Typeless 设置
+          BeautifulInput 设置
         </h1>
         <div className="header-actions">
           {hasChanges && (
@@ -470,7 +470,7 @@ const Settings: React.FC = () => {
                 开机自启
               </label>
               <span className="help-text">
-                系统启动时自动运行 Typeless
+                系统启动时自动运行 BeautifulInput
               </span>
             </div>
 
