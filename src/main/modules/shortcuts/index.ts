@@ -5,7 +5,6 @@ import { UserSettings } from '@shared/types/index.js'
 interface ShortcutHandlers {
   toggleRecording: () => void
   quickTranslate?: () => void
-  aiAssistant?: () => void
 }
 
 export class ShortcutsModule extends EventEmitter {
@@ -29,11 +28,6 @@ export class ShortcutsModule extends EventEmitter {
     // 注册快速翻译快捷键
     if (shortcuts.quickTranslate && handlers.quickTranslate) {
       this.register('quickTranslate', shortcuts.quickTranslate, handlers.quickTranslate)
-    }
-
-    // 注册 AI 助手快捷键
-    if (shortcuts.aiAssistant && handlers.aiAssistant) {
-      this.register('aiAssistant', shortcuts.aiAssistant, handlers.aiAssistant)
     }
 
     console.log('[Shortcuts] 快捷键注册完成')
@@ -120,8 +114,6 @@ export class ShortcutsModule extends EventEmitter {
         return this.handlers.toggleRecording
       case 'quickTranslate':
         return this.handlers.quickTranslate || null
-      case 'aiAssistant':
-        return this.handlers.aiAssistant || null
       default:
         return null
     }

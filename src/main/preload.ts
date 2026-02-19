@@ -52,11 +52,6 @@ interface BeautifulInputAPI {
   getFloatPosition: () => Promise<FloatPosition | null>
 
   // AI 功能
-  aiAssistant: (params: { text: string; action: string }) => Promise<{
-    success: boolean
-    result?: string
-    error?: string
-  }>
   translate: (params: { text: string; targetLanguage: string }) => Promise<{
     success: boolean
     result?: string
@@ -117,7 +112,6 @@ const api: BeautifulInputAPI = {
   getFloatPosition: () => ipcRenderer.invoke(IpcChannels.GET_FLOAT_POSITION),
 
   // AI 功能
-  aiAssistant: (params) => ipcRenderer.invoke(IpcChannels.AI_ASSISTANT, params),
   translate: (params) => ipcRenderer.invoke(IpcChannels.TRANSLATE, params),
 
   // 系统

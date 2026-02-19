@@ -30,13 +30,16 @@ export interface UserSettings {
   shortcuts: {
     toggleRecording: string
     quickTranslate: string
-    aiAssistant: string
   }
 
   // 个性化设置
   toneStyle: 'formal' | 'casual' | 'professional' | 'creative'
   personalDictionary: string[]
   defaultLanguage: string
+
+  // 翻译设置
+  translateSourceLanguage: string  // 翻译源语言（用于语音翻译）
+  translateTargetLanguage: string  // 翻译目标语言（用于语音翻译）
 
   // 其他设置
   autoStart: boolean
@@ -45,10 +48,6 @@ export interface UserSettings {
 
   // 功能开关
   enableTranslation: boolean
-  enableAiAssistant: boolean
-
-  // AI 助手默认动作
-  aiAssistantAction: 'summarize' | 'explain' | 'expand'
 
   // 自动停止录音配置
   autoStopRecording: {
@@ -65,18 +64,17 @@ export const defaultSettings: UserSettings = {
   aiProvider: 'deepseek',
   shortcuts: {
     toggleRecording: 'Alt+Shift+R',
-    quickTranslate: 'Alt+Shift+T',
-    aiAssistant: 'Alt+Shift+A'
+    quickTranslate: 'Alt+Shift+T'
   },
   toneStyle: 'professional',
   personalDictionary: [],
   defaultLanguage: 'zh-CN',
+  translateSourceLanguage: 'zh-CN',   // 默认中文翻译为英文
+  translateTargetLanguage: 'en',
   autoStart: false,
   floatOpacity: 0.9,
   historyRetentionDays: 30,
   enableTranslation: false,
-  enableAiAssistant: false,
-  aiAssistantAction: 'summarize',
   autoStopRecording: {
     enabled: true,
     vadSilenceDuration: 5000
@@ -196,12 +194,8 @@ export enum IpcChannels {
   UPDATE_FLOAT_POSITION = 'update-float-position',
   MOVE_FLOAT_WINDOW = 'move-float-window',
   GET_FLOAT_POSITION = 'get-float-position',
-  
-  // 快捷键
-  UPDATE_SHORTCUTS = 'update-shortcuts',
-  
+
   // AI 功能
-  AI_ASSISTANT = 'ai-assistant',
   TRANSLATE = 'translate',
   
   // 系统

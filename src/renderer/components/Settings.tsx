@@ -1,21 +1,217 @@
 import React, { useState, useEffect } from 'react'
-import { 
-  Key, 
-  Keyboard, 
-  Palette, 
-  Book, 
-  Settings2, 
-  Save, 
+import {
+  Key,
+  Keyboard,
+  Palette,
+  Book,
+  Settings2,
+  Save,
   RotateCcw,
   Check,
   AlertCircle,
   Eye,
   EyeOff,
   Globe,
-  Volume2
+  Volume2,
+  CircleX
 } from 'lucide-react'
 import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES } from '@shared/types/index.js'
 import './Settings.css'
+
+// 快捷键录制组件
+interface ShortcutRecorderProps {
+  label: string
+  icon: string
+  value: string
+  onChange: (value: string) => void
+  // 新增：当前所有快捷键配置，用于互斥验证
+  allShortcuts: UserSettings['shortcuts']
+  currentKey: keyof UserSettings['shortcuts']
+}
+
+const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
+  label,
+  icon,
+  value,
+  onChange,
+  allShortcuts,
+  currentKey
+}) => {
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordedShortcut, setRecordedShortcut] = useState(value)
+  const [currentKeys, setCurrentKeys] = useState<string[]>([])
+  const [conflictError, setConflictError] = useState<string | null>(null)
+
+  // 按键名到 Electron 格式的映射
+  const keyToElectronFormat = (key: string): string => {
+    const keyMap: { [key: string]: string } = {
+      'Control': 'CommandOrControl',
+      'Ctrl': 'CommandOrControl',
+      'Meta': 'CommandOrControl',
+      'Command': 'CommandOrControl',
+      'Alt': 'Alt',
+      'Shift': 'Shift',
+      'Super': 'Super'
+    }
+    return keyMap[key] || key
+  }
+
+  const startRecording = () => {
+    setIsRecording(true)
+    setCurrentKeys([])
+    setConflictError(null)
+  }
+
+  const stopRecording = () => {
+    setIsRecording(false)
+    setCurrentKeys([])
+    setConflictError(null)
+  }
+
+  // 检查快捷键冲突
+  const checkConflict = (shortcut: string): boolean => {
+    if (!shortcut) return false
+
+    for (const [key, value] of Object.entries(allShortcuts)) {
+      if (key !== currentKey && value === shortcut) {
+        // 获取冲突功能的名称
+        const conflictNames: { [key: string]: string } = {
+          'toggleRecording': '开始/停止录音',
+          'quickTranslate': '快速翻译'
+        }
+        setConflictError(`该快捷键已被"${conflictNames[key]}"使用`)
+        return true
+      }
+    }
+    setConflictError(null)
+    return false
+  }
+
+  // 处理键盘事件
+  useEffect(() => {
+    if (!isRecording) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      // ESC 键取消录制
+      if (e.key === 'Escape') {
+        stopRecording()
+        return
+      }
+
+      const keys: string[] = []
+
+      // 添加修饰键
+      if (e.ctrlKey) keys.push('CommandOrControl')
+      if (e.altKey) keys.push('Alt')
+      if (e.shiftKey) keys.push('Shift')
+      if (e.metaKey) keys.push('CommandOrControl')
+
+      // 添加主键（排除修饰键）
+      const mainKey = e.key
+      if (
+        !['Control', 'Alt', 'Shift', 'Meta', 'Escape'].includes(mainKey) &&
+        mainKey !== 'Process'
+      ) {
+        // 转换特殊键名
+        let electronKey = mainKey
+        if (mainKey === ' ') electronKey = 'Space'
+        else if (mainKey.startsWith('Arrow')) electronKey = mainKey.replace('Arrow', '')
+        else if (mainKey.length === 1) {
+          electronKey = mainKey.toUpperCase()
+        }
+
+        keys.push(electronKey)
+
+        // 格式化为 Electron 快捷键字符串
+        const shortcut = keys.join('+')
+
+        // 检查冲突
+        if (!checkConflict(shortcut)) {
+          setRecordedShortcut(shortcut)
+          onChange(shortcut)
+        }
+        setIsRecording(false)
+        setCurrentKeys([])
+      } else {
+        // 只按下修饰键时，显示当前按下的键
+        setCurrentKeys(keys)
+      }
+    }
+
+    // 监听键盘事件
+    window.addEventListener('keydown', handleKeyDown, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, allShortcuts])
+
+  // 获取显示的快捷键格式
+  const getDisplayShortcut = (shortcut: string) => {
+    if (!shortcut) return ''
+    const isMac = typeof process !== 'undefined' && process.platform === 'darwin'
+    return shortcut
+      .replace(/CommandOrControl/g, isMac ? 'Cmd' : 'Ctrl')
+      .replace(/\+/g, ' + ')
+  }
+
+  // 图标组件
+  const IconComponent = icon === 'Keyboard' ? Keyboard : icon === 'Globe' ? Globe : Volume2
+
+  return (
+    <div className="form-group">
+      <label>
+        <IconComponent className="label-icon" />
+        {label}
+      </label>
+      <div className="shortcut-input-group">
+        <input
+          type="text"
+          value={isRecording ? (currentKeys.length > 0 ? currentKeys.join(' + ') + ' + ...' : '请按下快捷键组合...') : recordedShortcut}
+          onChange={(e) => {
+            if (!isRecording) {
+              setRecordedShortcut(e.target.value)
+              onChange(e.target.value)
+              // 清除冲突错误（手动输入时）
+              setConflictError(null)
+            }
+          }}
+          placeholder={isRecording ? '请按下快捷键组合...' : '点击录制按钮，然后按快捷键'}
+          readOnly={isRecording}
+          className={isRecording ? 'recording' : ''}
+        />
+        <button
+          className={`input-action record-btn ${isRecording ? 'recording' : ''}`}
+          onClick={isRecording ? stopRecording : startRecording}
+          title={isRecording ? '取消录制' : '录制快捷键'}
+        >
+          {isRecording ? <CircleX /> : <Keyboard />}
+        </button>
+      </div>
+      {/* 冲突错误提示 */}
+      {conflictError && (
+        <span className="help-text error-text">
+          <AlertCircle style={{ display: 'inline', width: '14px', height: '14px', marginRight: '4px' }} />
+          {conflictError}
+        </span>
+      )}
+      {!isRecording && value && !conflictError && (
+        <span className="help-text">
+          当前快捷键: <kbd>{getDisplayShortcut(value)}</kbd>
+        </span>
+      )}
+      {isRecording && (
+        <span className="help-text recording-hint">
+          按 ESC 键取消录制
+        </span>
+      )}
+    </div>
+  )
+}
 
 const Settings: React.FC = () => {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
@@ -339,50 +535,26 @@ const Settings: React.FC = () => {
           <div className="settings-section">
             <h2>快捷键设置</h2>
             <p className="section-description">
-              自定义全局快捷键，修改后立即生效
+              点击录制按钮后，直接按下键盘组合键即可设置。每个快捷键必须唯一，不能重复。
             </p>
 
-            <div className="form-group">
-              <label>
-                <Keyboard className="label-icon" />
-                开始/停止录音
-              </label>
-              <input
-                type="text"
-                value={settings.shortcuts.toggleRecording}
-                onChange={e => updateShortcut('toggleRecording', e.target.value)}
-                placeholder="例如: CommandOrControl+Shift+R"
-              />
-              <span className="help-text">
-                格式: CommandOrControl+Shift+R (Mac 用 Command, Windows/Linux 用 Control)
-              </span>
-            </div>
+            <ShortcutRecorder
+              label="开始/停止录音"
+              icon="Keyboard"
+              value={settings.shortcuts.toggleRecording}
+              onChange={(value) => updateShortcut('toggleRecording', value)}
+              allShortcuts={settings.shortcuts}
+              currentKey="toggleRecording"
+            />
 
-            <div className="form-group">
-              <label>
-                <Globe className="label-icon" />
-                快速翻译
-              </label>
-              <input
-                type="text"
-                value={settings.shortcuts.quickTranslate}
-                onChange={e => updateShortcut('quickTranslate', e.target.value)}
-                placeholder="例如: CommandOrControl+Shift+T"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>
-                <Volume2 className="label-icon" />
-                AI 助手
-              </label>
-              <input
-                type="text"
-                value={settings.shortcuts.aiAssistant}
-                onChange={e => updateShortcut('aiAssistant', e.target.value)}
-                placeholder="例如: CommandOrControl+Shift+A"
-              />
-            </div>
+            <ShortcutRecorder
+              label="快速翻译"
+              icon="Globe"
+              value={settings.shortcuts.quickTranslate}
+              onChange={(value) => updateShortcut('quickTranslate', value)}
+              allShortcuts={settings.shortcuts}
+              currentKey="quickTranslate"
+            />
           </div>
         )}
 
@@ -390,25 +562,6 @@ const Settings: React.FC = () => {
         {activeTab === 'personalization' && (
           <div className="settings-section">
             <h2>个性化设置</h2>
-
-            {/* AI 助手默认动作 */}
-            <div className="form-group">
-              <label>
-                <Volume2 className="label-icon" />
-                AI 助手默认动作
-              </label>
-              <select
-                value={settings.aiAssistantAction}
-                onChange={e => updateSetting('aiAssistantAction', e.target.value as 'summarize' | 'explain' | 'expand')}
-              >
-                <option value="summarize">总结</option>
-                <option value="explain">解释</option>
-                <option value="expand">扩写</option>
-              </select>
-              <span className="help-text">
-                使用快捷键调用 AI 助手时的默认处理方式
-              </span>
-            </div>
 
             {/* 自动停止录音 */}
             <div className="form-group checkbox">
@@ -562,6 +715,55 @@ const Settings: React.FC = () => {
               </span>
             </div>
 
+            {/* 语音翻译设置 */}
+            <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '20px', marginTop: '20px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#1a1a1a' }}>
+                语音翻译设置
+              </h3>
+
+              {/* 翻译源语言 */}
+              <div className="form-group">
+                <label>
+                  <Globe className="label-icon" />
+                  翻译源语言
+                </label>
+                <select
+                  value={settings.translateSourceLanguage || 'zh-CN'}
+                  onChange={e => updateSetting('translateSourceLanguage', e.target.value)}
+                >
+                  {SUPPORTED_LANGUAGES.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="help-text">
+                  语音翻译时，识别的源语言
+                </span>
+              </div>
+
+              {/* 翻译目标语言 */}
+              <div className="form-group">
+                <label>
+                  <Globe className="label-icon" />
+                  翻译目标语言
+                </label>
+                <select
+                  value={settings.translateTargetLanguage || 'en'}
+                  onChange={e => updateSetting('translateTargetLanguage', e.target.value)}
+                >
+                  {SUPPORTED_LANGUAGES.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="help-text">
+                  语音翻译时，翻译成的目标语言
+                </span>
+              </div>
+            </div>
+
             {/* 功能开关 */}
             <div className="form-group checkbox">
               <label>
@@ -571,17 +773,6 @@ const Settings: React.FC = () => {
                   onChange={e => updateSetting('enableTranslation', e.target.checked)}
                 />
                 启用翻译功能
-              </label>
-            </div>
-
-            <div className="form-group checkbox">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.enableAiAssistant}
-                  onChange={e => updateSetting('enableAiAssistant', e.target.checked)}
-                />
-                启用 AI 助手功能
               </label>
             </div>
           </div>

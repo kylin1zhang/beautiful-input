@@ -41,6 +41,7 @@ let storeService: StoreService
 let isRecording = false
 let currentRecordingDuration = 0
 let recordingTimer: NodeJS.Timeout | null = null
+let isTranslateRecording = false  // 标记是否为翻译录音
 
 /**
  * 创建悬浮球窗口
@@ -298,7 +299,8 @@ async function startRecording(): Promise<void> {
     isRecording = true
     currentRecordingDuration = 0
 
-    // 监听自动停止事件
+    // 监听自动停止事件（先移除旧的监听器，避免重复注册）
+    recordingModule.removeAllListeners('auto-stop')
     if (enableVAD) {
       recordingModule.once('auto-stop', ({ reason }) => {
         console.log('[Main] 自动停止触发，原因:', reason)
@@ -447,8 +449,8 @@ async function stopRecording(): Promise<void> {
 
     console.log('[Main] AI 处理结果:', processedResult.result)
 
-    // 模拟键盘输入
-    const inputSuccess = await inputSimulatorModule.typeText(processedResult.result)
+    // 使用快速剪贴板输入
+    const inputSuccess = await inputSimulatorModule.typeTextFast(processedResult.result)
 
     if (!inputSuccess) {
       // 输入失败，复制到剪贴板
@@ -552,33 +554,162 @@ async function stopRecording(): Promise<void> {
 }
 
 /**
- * 快速翻译功能
+ * 语音翻译功能（录音 → 识别 → 翻译 → 输入）
  */
 async function quickTranslate(): Promise<void> {
-  try {
-    const { clipboard } = require('electron')
-    const text = clipboard.readText()
+  // 如果正在录音，停止录音并执行翻译
+  if (isRecording && !isTranslateRecording) {
+    // 普通录音模式下，先停止当前录音，然后开始翻译录音
+    await stopRecording()
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
 
-    if (!text || text.trim().length === 0) {
+  // 如果正在翻译录音，停止它
+  if (isTranslateRecording) {
+    await stopTranslateRecording()
+    return
+  }
+
+  // 开始翻译录音
+  try {
+    // 检查权限
+    const hasPermission = await recordingModule.checkPermission()
+    if (!hasPermission) {
+      const errorMsg = '请允许 BeautifulInput 访问麦克风'
       if (Notification.isSupported()) {
         new Notification({
-          title: 'BeautifulInput 提示',
-          body: '剪贴板为空，请先复制要翻译的文本',
+          title: 'BeautifulInput 错误',
+          body: errorMsg,
           icon: getAppIcon()
         }).show()
       }
       return
     }
 
-    console.log('[Main] 快速翻译，文本:', text.substring(0, 50) + '...')
+    const settings = settingsModule.getSettings()
+    const autoStopConfig = settings.autoStopRecording || { enabled: false, vadSilenceDuration: 5000 }
+    const enableVAD = autoStopConfig.enabled
 
-    // 更新悬浮球状态
+    // 开始录音
+    await recordingModule.startRecording({
+      enableVAD,
+      vadSilenceDuration: autoStopConfig.vadSilenceDuration
+    })
+    isRecording = true
+    isTranslateRecording = true
+    currentRecordingDuration = 0
+
+    // 监听自动停止事件
+    recordingModule.removeAllListeners('auto-stop')
+    if (enableVAD) {
+      recordingModule.once('auto-stop', () => {
+        if (isTranslateRecording) {
+          stopTranslateRecording()
+        }
+      })
+    }
+
+    // 更新悬浮球状态为翻译录音
+    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+      status: 'recording',
+      mode: 'translate',  // 标记为翻译模式
+      duration: 0
+    })
+
+    // 启动计时器
+    recordingTimer = setInterval(() => {
+      currentRecordingDuration++
+      floatWindow?.webContents.send(IpcChannels.RECORDING_DURATION_UPDATED, {
+        duration: currentRecordingDuration
+      })
+      if (currentRecordingDuration >= 600) {
+        stopTranslateRecording()
+      }
+    }, 1000)
+
+    // 显示通知
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'BeautifulInput 语音翻译',
+        body: '开始录音，再次按快捷键停止',
+        icon: getAppIcon()
+      }).show()
+    }
+
+    console.log('[Main] 开始翻译录音')
+  } catch (error) {
+    console.error('[Main] 开始翻译录音失败:', error)
+    isRecording = false
+    isTranslateRecording = false
+    if (recordingTimer) {
+      clearInterval(recordingTimer)
+      recordingTimer = null
+    }
+  }
+}
+
+/**
+ * 停止翻译录音并处理翻译
+ */
+async function stopTranslateRecording(): Promise<void> {
+  if (!isTranslateRecording) return
+
+  try {
+    // 停止计时器
+    if (recordingTimer) {
+      clearInterval(recordingTimer)
+      recordingTimer = null
+    }
+
+    // 更新状态为处理中
     floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
       status: 'processing'
     })
 
+    // 停止录音并获取音频数据
+    const audioBuffer = await recordingModule.stopRecording()
+    isRecording = false
+    isTranslateRecording = false
+
+    // 检查录音时长
+    if (currentRecordingDuration < 1) {
+      const errorMsg = '录音时间太短'
+      floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+        status: 'error'
+      })
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'BeautifulInput 提示',
+          body: errorMsg,
+          icon: getAppIcon()
+        }).show()
+      }
+      setTimeout(() => {
+        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+          status: 'idle'
+        })
+      }, 3000)
+      return
+    }
+
+    console.log('[Main] 翻译录音停止，开始处理...')
+
     const settings = settingsModule.getSettings()
-    // 根据选择的 AI 服务提供商获取对应的 API Key
+
+    // 语音识别
+    const transcriptionResult = await transcriptionModule.transcribe(
+      audioBuffer,
+      settings.groqApiKey,
+      settings.personalDictionary
+    )
+
+    if (!transcriptionResult.success || !transcriptionResult.text) {
+      throw new Error(transcriptionResult.error || '语音识别失败')
+    }
+
+    console.log('[Main] 识别结果:', transcriptionResult.text)
+
+    // 第一步：口语化处理（clean）
     const aiProvider = settings.aiProvider || 'deepseek'
     const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
 
@@ -587,21 +718,41 @@ async function quickTranslate(): Promise<void> {
       throw new Error(`请先在设置中配置 ${providerName} API Key`)
     }
 
-    const result = await aiProcessorModule.translate(
-      text,
-      settings.defaultLanguage === 'zh-CN' ? 'en' : 'zh-CN',
-      apiKey
+    const cleanResult = await aiProcessorModule.process(
+      transcriptionResult.text,
+      'clean',  // 使用 clean 模式进行口语化处理
+      apiKey,
+      settings.toneStyle,
+      undefined,
+      aiProvider
     )
 
-    if (!result.success || !result.result) {
-      throw new Error(result.error || '翻译失败')
+    if (!cleanResult.success || !cleanResult.result) {
+      throw new Error(cleanResult.error || '口语化处理失败')
     }
 
-    // 模拟输入翻译结果
-    const inputSuccess = await inputSimulatorModule.typeText(result.result)
+    console.log('[Main] 口语化处理结果:', cleanResult.result)
+
+    // 第二步：翻译处理后的文本
+    const translateResult = await aiProcessorModule.translate(
+      cleanResult.result,  // 翻译口语化后的结果
+      settings.translateTargetLanguage || 'en',
+      apiKey,
+      aiProvider
+    )
+
+    if (!translateResult.success || !translateResult.result) {
+      throw new Error(translateResult.error || '翻译失败')
+    }
+
+    console.log('[Main] 翻译结果:', translateResult.result)
+
+    // 快速输入翻译结果（强制使用剪贴板）
+    const inputSuccess = await inputSimulatorModule.typeTextFast(translateResult.result)
 
     if (!inputSuccess) {
-      clipboard.writeText(result.result)
+      const { clipboard } = require('electron')
+      clipboard.writeText(translateResult.result)
       if (Notification.isSupported()) {
         new Notification({
           title: 'BeautifulInput 提示',
@@ -616,11 +767,14 @@ async function quickTranslate(): Promise<void> {
       status: 'idle'
     })
 
-    console.log('[Main] 快速翻译完成')
+    console.log('[Main] 语音翻译完成')
   } catch (error) {
-    console.error('[Main] 快速翻译失败:', error)
+    console.error('[Main] 语音翻译失败:', error)
+    isRecording = false
+    isTranslateRecording = false
+
     floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-      status: 'idle'
+      status: 'error'
     })
 
     if (Notification.isSupported()) {
@@ -630,92 +784,12 @@ async function quickTranslate(): Promise<void> {
         icon: getAppIcon()
       }).show()
     }
-  }
-}
 
-/**
- * AI 助手功能
- */
-async function aiAssistant(): Promise<void> {
-  try {
-    const { clipboard } = require('electron')
-    const text = clipboard.readText()
-
-    if (!text || text.trim().length === 0) {
-      if (Notification.isSupported()) {
-        new Notification({
-          title: 'BeautifulInput 提示',
-          body: '剪贴板为空，请先复制要处理的文本',
-          icon: getAppIcon()
-        }).show()
-      }
-      return
-    }
-
-    console.log('[Main] AI 助手，文本:', text.substring(0, 50) + '...')
-
-    // 更新悬浮球状态
-    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-      status: 'processing'
-    })
-
-    const settings = settingsModule.getSettings()
-    const action = settings.aiAssistantAction || 'summarize'
-
-    // 根据选择的 AI 服务提供商获取对应的 API Key
-    const aiProvider = settings.aiProvider || 'deepseek'
-    const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
-
-    if (!apiKey) {
-      const providerName = aiProvider === 'qwen' ? '千问' : 'DeepSeek'
-      throw new Error(`请先在设置中配置 ${providerName} API Key`)
-    }
-
-    const result = await aiProcessorModule.process(
-      text,
-      'assistant',
-      apiKey,
-      settings.toneStyle,
-      action
-    )
-
-    if (!result.success || !result.result) {
-      throw new Error(result.error || 'AI 处理失败')
-    }
-
-    // 模拟输入处理结果
-    const inputSuccess = await inputSimulatorModule.typeText(result.result)
-
-    if (!inputSuccess) {
-      clipboard.writeText(result.result)
-      if (Notification.isSupported()) {
-        new Notification({
-          title: 'BeautifulInput 提示',
-          body: '处理结果已复制到剪贴板',
-          icon: getAppIcon()
-        }).show()
-      }
-    }
-
-    // 恢复空闲状态
-    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-      status: 'idle'
-    })
-
-    console.log('[Main] AI 助手完成')
-  } catch (error) {
-    console.error('[Main] AI 助手失败:', error)
-    floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-      status: 'idle'
-    })
-
-    if (Notification.isSupported()) {
-      new Notification({
-        title: 'BeautifulInput 错误',
-        body: 'AI 处理失败: ' + (error as Error).message,
-        icon: getAppIcon()
-      }).show()
-    }
+    setTimeout(() => {
+      floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+        status: 'idle'
+      })
+    }, 3000)
   }
 }
 
@@ -738,8 +812,7 @@ function registerIpcHandlers(): void {
     shortcutsModule.unregisterAll()
     shortcutsModule.registerAll(settingsModule.getSettings().shortcuts, {
       toggleRecording,
-      quickTranslate,
-      aiAssistant
+      quickTranslate
     })
     // 通知所有窗口设置已更新
     if (floatWindow && !floatWindow.isDestroyed()) {
@@ -807,12 +880,6 @@ function registerIpcHandlers(): void {
   })
 
   // AI 功能
-  ipcMain.handle(IpcChannels.AI_ASSISTANT, async (_, { text, action }) => {
-    const settings = settingsModule.getSettings()
-    const mode = action === 'summarize' ? 'assistant' : action === 'explain' ? 'assistant' : 'assistant'
-    return aiProcessorModule.process(text, mode, settings.deepseekApiKey, settings.toneStyle, action)
-  })
-
   ipcMain.handle(IpcChannels.TRANSLATE, async (_, { text, targetLanguage }) => {
     const settings = settingsModule.getSettings()
     return aiProcessorModule.translate(text, targetLanguage, settings.deepseekApiKey)
@@ -856,8 +923,7 @@ app.whenReady().then(async () => {
   const settings = settingsModule.getSettings()
   shortcutsModule.registerAll(settings.shortcuts, {
     toggleRecording,
-    quickTranslate,
-    aiAssistant
+    quickTranslate
   })
 
   // 默认打开开发工具（开发模式）
