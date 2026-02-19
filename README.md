@@ -1,4 +1,4 @@
-# Typeless
+# BeautifulInput
 
 AI 语音输入工具 - 将口语化语言整理成条理清晰的文字
 
@@ -6,7 +6,7 @@ AI 语音输入工具 - 将口语化语言整理成条理清晰的文字
 
 - 🎙️ **语音录制** - 一键开始/停止录音
 - 🤖 **智能识别** - 使用 Groq Whisper API 进行语音识别
-- ✨ **AI 处理** - 使用 DeepSeek API 去除口语化、格式化文本
+- ✨ **AI 处理** - 使用 Qwen/DeepSeek API 去除口语化、格式化文本
 - ⌨️ **自动输入** - 将处理后的文本自动插入光标位置
 - 🌐 **中英混说** - 准确识别中英文混合语音
 - 📚 **历史记录** - 保存和管理所有处理记录
@@ -18,7 +18,7 @@ AI 语音输入工具 - 将口语化语言整理成条理清晰的文字
 - **框架**: Electron + TypeScript + React
 - **状态管理**: Zustand
 - **语音识别**: Groq Whisper API
-- **AI 处理**: DeepSeek API
+- **AI 处理**: Qwen/DeepSeek API
 - **输入模拟**: nut-js
 - **本地存储**: electron-store
 
@@ -57,7 +57,7 @@ npm run dist
 ## 项目结构
 
 ```
-typeless/
+beautiful-input/
 ├── src/
 │   ├── main/              # 主进程
 │   │   ├── index.ts       # 主进程入口
@@ -72,6 +72,7 @@ typeless/
 │   │   │   └── history/       # 历史记录模块
 │   │   └── services/      # 服务层
 │   │       ├── groq.service.ts
+│   │       ├── qwen.service.ts
 │   │       ├── deepseek.service.ts
 │   │       └── store.service.ts
 │   ├── renderer/          # 渲染进程

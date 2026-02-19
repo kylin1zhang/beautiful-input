@@ -222,7 +222,7 @@ function createTray(): void {
     }
   ])
 
-  tray.setToolTip('Typeless - AI语音输入工具')
+  tray.setToolTip('BeautifulInput - AI语音输入工具')
   tray.setContextMenu(contextMenu)
 
   tray.on('click', () => {
@@ -546,7 +546,7 @@ function registerIpcHandlers(): void {
  */
 app.whenReady().then(async () => {
   // 设置应用用户模型 ID（Windows）
-  electronApp.setAppUserModelId('com.typeless.app')
+  electronApp.setAppUserModelId('com.beautifulinput.app')
 
   // 初始化服务
   storeService = new StoreService()

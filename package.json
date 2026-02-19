@@ -1,9 +1,9 @@
 {
-  "name": "typeless",
+  "name": "beautiful-input",
   "version": "1.0.0",
-  "description": "AI语音输入工具 - 将口语化语言整理成条理清晰的文字",
+  "description": "BeautifulInput - AI语音输入工具，将口语化语言整理成条理清晰的文字",
   "main": "./dist/main/index.js",
-  "author": "Typeless Team",
+  "author": "BeautifulInput Team",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -47,8 +47,8 @@
     "vite": "^5.4.0"
   },
   "build": {
-    "appId": "com.typeless.app",
-    "productName": "Typeless",
+    "appId": "com.beautifulinput.app",
+    "productName": "BeautifulInput",
     "directories": {
       "output": "release"
     },
