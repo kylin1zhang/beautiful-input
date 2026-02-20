@@ -7,13 +7,16 @@ export interface TranscriptionOptions {
   temperature?: number
 }
 
+// Groq API 限制：最大文件大小 25MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024
+
 export class GroqService {
   private client: Groq | null = null
 
   constructor(apiKey: string) {
     if (apiKey) {
       this.client = new Groq({
-        apiKey
+        apiKey,
       })
     }
   }
@@ -24,7 +27,7 @@ export class GroqService {
   setApiKey(apiKey: string): void {
     if (apiKey) {
       this.client = new Groq({
-        apiKey
+        apiKey,
       })
     } else {
       this.client = null
@@ -45,9 +48,20 @@ export class GroqService {
       }
     }
 
+    // 检查文件大小
+    if (audioBuffer.length > MAX_FILE_SIZE) {
+      const sizeMB = (audioBuffer.length / 1024 / 1024).toFixed(1)
+      return {
+        success: false,
+        error: `音频文件过大 (${sizeMB}MB)，最大支持 25MB。请缩短录音时长。`
+      }
+    }
+
     try {
-      // 创建 Blob
-      const blob = new Blob([audioBuffer], { type: 'audio/wav' })
+      console.log(`[GroqService] 开始语音识别，音频大小: ${(audioBuffer.length / 1024).toFixed(1)} KB`)
+
+      // 创建 Blob（将 Buffer 转换为 Uint8Array 以兼容 BlobPart 类型）
+      const blob = new Blob([new Uint8Array(audioBuffer)], { type: 'audio/wav' })
 
       // 创建文件对象
       const file = new File([blob], 'recording.wav', { type: 'audio/wav' })
@@ -74,7 +88,10 @@ export class GroqService {
       }
     } catch (error) {
       console.error('[GroqService] 识别失败:', error)
-      
+
+      // 检查错误类型并提供友好的错误信息
+      const errorMessage = (error as Error).message || ''
+
       if (error instanceof Groq.APIError) {
         if (error.status === 401) {
           return {
@@ -84,12 +101,17 @@ export class GroqService {
         } else if (error.status === 429) {
           return {
             success: false,
-            error: '请求过于频繁'
+            error: '请求过于频繁，请稍后再试'
           }
         } else if (error.status === 413) {
           return {
             success: false,
-            error: '音频文件过大'
+            error: '音频文件过大，请缩短录音时长'
+          }
+        } else if (error.status === 504 || errorMessage.includes('timeout')) {
+          return {
+            success: false,
+            error: '服务器响应超时，请稍后重试'
           }
         }
         return {
@@ -98,9 +120,25 @@ export class GroqService {
         }
       }
 
+      // 处理网络错误
+      if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('ECONN')) {
+        return {
+          success: false,
+          error: '网络连接失败，请检查网络后重试'
+        }
+      }
+
+      // 处理超时错误
+      if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+        return {
+          success: false,
+          error: '请求超时，请缩短录音时长或稍后重试'
+        }
+      }
+
       return {
         success: false,
-        error: (error as Error).message || '未知错误'
+        error: errorMessage || '未知错误'
       }
     }
   }

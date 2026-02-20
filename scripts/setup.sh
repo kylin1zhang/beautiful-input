@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Typeless 项目设置脚本
+# BeautifulInput 项目设置脚本
 
 set -e
 
-echo "🚀 Typeless 项目设置"
+echo "🚀 BeautifulInput 项目设置"
 echo "===================="
 echo ""
 

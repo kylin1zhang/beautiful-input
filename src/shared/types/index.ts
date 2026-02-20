@@ -22,8 +22,10 @@ export interface ProcessingResult {
 export interface UserSettings {
   // API 配置
   groqApiKey: string
+  openaiApiKey: string  // OpenAI API Key (用于 Whisper 等服务)
   deepseekApiKey: string
   qwenApiKey: string
+  asrProvider: 'groq' | 'openai'  // 语音识别服务提供商选择
   aiProvider: 'deepseek' | 'qwen'  // AI 服务提供商选择
 
   // 快捷键设置
@@ -46,21 +48,21 @@ export interface UserSettings {
   floatOpacity: number
   historyRetentionDays: number
 
-  // 功能开关
-  enableTranslation: boolean
-
   // 自动停止录音配置
   autoStopRecording: {
     enabled: boolean
-    vadSilenceDuration: number // 毫秒
+    vadSilenceDuration: number // 毫秒（内部存储），界面显示为秒
+    vadSilenceThreshold?: number // 静音检测阈值（0.010-0.030），数值越小越灵敏，建议范围：0.010-0.025
   }
 }
 
 // 默认设置
 export const defaultSettings: UserSettings = {
   groqApiKey: '',
+  openaiApiKey: '',
   deepseekApiKey: '',
   qwenApiKey: '',
+  asrProvider: 'groq',
   aiProvider: 'deepseek',
   shortcuts: {
     toggleRecording: 'Alt+Shift+R',
@@ -74,10 +76,10 @@ export const defaultSettings: UserSettings = {
   autoStart: false,
   floatOpacity: 0.9,
   historyRetentionDays: 30,
-  enableTranslation: false,
   autoStopRecording: {
     enabled: true,
-    vadSilenceDuration: 5000
+    vadSilenceDuration: 3500,  // 默认 3.5 秒
+    vadSilenceThreshold: 0.008  // 默认值，建议范围：0.006-0.025
   }
 }
 

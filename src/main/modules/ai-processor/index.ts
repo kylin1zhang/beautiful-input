@@ -20,6 +20,7 @@ export class AiProcessorModule extends EventEmitter {
    * @param toneStyle 语调风格
    * @param assistantAction AI 助手动作
    * @param provider AI 服务提供商
+   * @param personalDictionary 个人词典
    */
   async process(
     text: string,
@@ -27,7 +28,8 @@ export class AiProcessorModule extends EventEmitter {
     apiKey: string,
     toneStyle: UserSettings['toneStyle'] = 'professional',
     assistantAction?: string,
-    provider: 'deepseek' | 'qwen' = 'deepseek'
+    provider: 'deepseek' | 'qwen' = 'deepseek',
+    personalDictionary: string[] = []
   ): Promise<AiProcessingResponse> {
     if (!apiKey) {
       return {
@@ -38,7 +40,7 @@ export class AiProcessorModule extends EventEmitter {
 
     try {
       // 构建 prompt
-      const prompt = this.buildPrompt(text, mode, toneStyle, assistantAction)
+      const prompt = this.buildPrompt(text, mode, toneStyle, assistantAction, personalDictionary)
 
       // 根据提供商选择 API
       const result = await retry(
@@ -283,7 +285,8 @@ export class AiProcessorModule extends EventEmitter {
     text: string,
     mode: AiProcessingMode,
     toneStyle: UserSettings['toneStyle'],
-    assistantAction?: string
+    assistantAction?: string,
+    personalDictionary: string[] = []
   ): string {
     let promptTemplate: string
 
@@ -317,29 +320,38 @@ export class AiProcessorModule extends EventEmitter {
         promptTemplate = AI_PROMPTS.CLEAN
     }
 
-    // 应用语调风格
-    let tonePrompt = ''
-    switch (toneStyle) {
-      case 'formal':
-        tonePrompt = AI_PROMPTS.TONE_FORMAL
-        break
-      case 'casual':
-        tonePrompt = AI_PROMPTS.TONE_CASUAL
-        break
-      case 'professional':
-        tonePrompt = AI_PROMPTS.TONE_PROFESSIONAL
-        break
-      case 'creative':
-        tonePrompt = AI_PROMPTS.TONE_CREATIVE
-        break
+    // 提取语调要求要点
+    const toneMap: Record<string, string> = {
+      'formal': '使用规范的书面语，避免口语化表达，适合商务或学术场景',
+      'casual': '使用轻松自然的表达，适合日常交流，保持友好亲切',
+      'professional': '准确使用专业术语，逻辑严谨，适合工作场景',
+      'creative': '使用生动形象的表达，适当使用修辞手法，富有感染力'
     }
 
     // 组合 prompt
     let finalPrompt = promptTemplate.replace('{{text}}', text)
-    
-    if (tonePrompt && mode === 'clean') {
-      // 如果是清理模式，先清理再应用语调
-      finalPrompt = `${finalPrompt}\n\n${tonePrompt.replace('{{text}}', '[上述文本]')}`
+
+    // 在 clean 模式下应用语调风格和个人词典
+    if (mode === 'clean') {
+      const additionalRequirements: string[] = []
+
+      // 添加语调要求
+      const toneRequirement = toneMap[toneStyle] || ''
+      if (toneRequirement) {
+        additionalRequirements.push(toneRequirement)
+      }
+
+      // 添加个人词典要求
+      if (personalDictionary.length > 0) {
+        additionalRequirements.push(
+          `以下专有名词必须保留原样，不得修改：${personalDictionary.join('、')}`
+        )
+      }
+
+      // 将所有要求追加到 prompt
+      if (additionalRequirements.length > 0) {
+        finalPrompt = `${finalPrompt}\n\n【处理要求】\n${additionalRequirements.map((req, i) => `${i + 1}. ${req}`).join('\n')}\n\n只输出清理后的文本，不要输出任何其他内容。`
+      }
     }
 
     return finalPrompt

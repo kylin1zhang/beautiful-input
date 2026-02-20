@@ -22,7 +22,19 @@
       "Bash(ssh:*)",
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)",
+      "Bash(cmd /c type \"C:\\\\Users\\\\ZHANGJ~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\E-----Kimi-Agent----------typeless\\\\tasks\\\\b499214.output\")",
+      "Skill(glm-plan-usage:usage-query-skill)",
+      "Bash(timeout /t 2 /nobreak)",
+      "Bash(dir \"E:\\\\下载\\\\Kimi_Agent_语音输入工具设计\\\\typeless\\\\resources\")",
+      "Bash(dir:*)",
+      "Bash(node scripts/generate-icon.js:*)",
+      "WebSearch",
+      "Bash(npm run build:*)",
+      "Bash(npm run build:win:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(powershell -Command:*)"
     ]
   }
 }

@@ -111,6 +111,19 @@ const api: BeautifulInputAPI = {
   moveFloatWindow: (position) => ipcRenderer.invoke(IpcChannels.MOVE_FLOAT_WINDOW, position),
   getFloatPosition: () => ipcRenderer.invoke(IpcChannels.GET_FLOAT_POSITION),
 
+  // 悬浮球拖动
+  floatDragStart: (mousePos) => ipcRenderer.invoke('float-drag-start', mousePos),
+  floatDragMove: (mousePos) => ipcRenderer.invoke('float-drag-move', mousePos),
+  floatDragEnd: () => ipcRenderer.invoke('float-drag-end'),
+
+  // 悬停状态监听
+  onHoverStateChanged: (callback) => {
+    ipcRenderer.on('hover-state', (_, isHovering) => callback(isHovering))
+  },
+  removeHoverListener: () => {
+    ipcRenderer.removeAllListeners('hover-state')
+  },
+
   // AI 功能
   translate: (params) => ipcRenderer.invoke(IpcChannels.TRANSLATE, params),
 

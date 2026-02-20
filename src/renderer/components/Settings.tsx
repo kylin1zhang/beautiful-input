@@ -13,7 +13,8 @@ import {
   EyeOff,
   Globe,
   Volume2,
-  CircleX
+  CircleX,
+  Clock
 } from 'lucide-react'
 import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES } from '@shared/types/index.js'
 import './Settings.css'
@@ -218,11 +219,20 @@ const Settings: React.FC = () => {
   const [originalSettings, setOriginalSettings] = useState<UserSettings>(defaultSettings)
   const [hasChanges, setHasChanges] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showGroqKey, setShowGroqKey] = useState(false)
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false)
   const [showDeepseekKey, setShowDeepseekKey] = useState(false)
   const [showQwenKey, setShowQwenKey] = useState(false)
   const [activeTab, setActiveTab] = useState<'api' | 'shortcuts' | 'personalization' | 'other'>('api')
+  const [newDictionaryItem, setNewDictionaryItem] = useState('')
+
+  // 自动保存定时器引用
+  const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  // API Key 暂存（失去焦点时才保存）
+  const [pendingApiKeySave, setPendingApiKeySave] = useState(false)
 
   // 加载设置
   useEffect(() => {
@@ -240,11 +250,52 @@ const Settings: React.FC = () => {
     }
   }
 
-  // 检查是否有更改
+  // 检查是否有更改（区分 API Key 和其他配置）
   useEffect(() => {
     const changed = JSON.stringify(settings) !== JSON.stringify(originalSettings)
     setHasChanges(changed)
-  }, [settings, originalSettings])
+
+    // 只对非 API Key 配置进行自动保存
+    if (changed && !pendingApiKeySave) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+      autoSaveTimerRef.current = setTimeout(() => {
+        autoSave()
+      }, 1000)
+    } else if (!changed) {
+      // 无更改时显示"已保存"状态
+      setSaveStatus('saved')
+    }
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+    }
+  }, [settings, originalSettings, pendingApiKeySave])
+
+  // 自动保存函数
+  const autoSave = async () => {
+    setSaveStatus('saving')
+    try {
+      await window.electronAPI.setSettings(settings)
+      setOriginalSettings(settings)
+      setHasChanges(false)
+      setPendingApiKeySave(false)
+      setSaveStatus('saved')
+      // 2 秒后恢复 idle 状态
+      setTimeout(() => {
+        if (!hasChanges && !pendingApiKeySave) {
+          setSaveStatus('idle')
+        }
+      }, 2000)
+    } catch (error) {
+      console.error('自动保存失败:', error)
+      setSaveStatus('idle')
+      showMessage('error', '保存失败')
+    }
+  }
 
   // 显示消息
   const showMessage = (type: 'success' | 'error', text: string) => {
@@ -252,18 +303,73 @@ const Settings: React.FC = () => {
     setTimeout(() => setMessage(null), 3000)
   }
 
-  // 保存设置
+  // 判断是否为 API Key 配置项
+  const isApiKeySetting = (key: keyof UserSettings): boolean => {
+    return ['groqApiKey', 'openaiApiKey', 'deepseekApiKey', 'qwenApiKey'].includes(key)
+  }
+
+  // 获取 API Key 的友好名称
+  const getApiKeyDisplayName = (key: string): string => {
+    const names: Record<string, string> = {
+      'groqApiKey': 'Groq',
+      'openaiApiKey': 'OpenAI',
+      'deepseekApiKey': 'DeepSeek',
+      'qwenApiKey': '千问'
+    }
+    return names[key] || key
+  }
+
+  // 验证 API Key 格式
+  const validateApiKey = (key: string, value: string): boolean => {
+    if (!value) return true // 空值允许（用户可以清空）
+    // 简单验证：至少 20 个字符，且以特定前缀开头
+    if (key === 'groqApiKey') {
+      return value.length >= 20 && value.startsWith('gsk_')
+    }
+    if (key === 'openaiApiKey') {
+      return value.length >= 20 && value.startsWith('sk-')
+    }
+    if (key === 'deepseekApiKey' || key === 'qwenApiKey') {
+      return value.length >= 20 && (value.startsWith('sk-') || value.startsWith('sess-'))
+    }
+    return true
+  }
+
+  // 处理 API Key 失去焦点
+  const handleApiKeyBlur = (key: keyof UserSettings, value: string) => {
+    setPendingApiKeySave(false)
+
+    // 验证格式
+    if (value && !validateApiKey(key, value)) {
+      const displayName = getApiKeyDisplayName(key)
+      showMessage('error', `${displayName} API Key 格式不正确，已恢复原值`)
+      // 验证失败，恢复到原始值
+      setSettings(prev => ({ ...prev, [key]: originalSettings[key] }))
+      return
+    }
+
+    // 验证通过，保存 API Key
+    autoSave()
+  }
+
+  // 手动保存（用户点击按钮）
   const handleSave = async () => {
-    setSaving(true)
-    try {
-      await window.electronAPI.setSettings(settings)
-      setOriginalSettings(settings)
-      showMessage('success', '设置已保存')
-    } catch (error) {
-      console.error('保存设置失败:', error)
-      showMessage('error', '保存设置失败')
-    } finally {
-      setSaving(false)
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+    }
+    autoSave()
+  }
+
+  // 更新设置字段
+  const updateSetting = <K extends keyof UserSettings>(
+    key: K,
+    value: UserSettings[K]
+  ) => {
+    setSettings(prev => ({ ...prev, [key]: value }))
+
+    // 如果是 API Key，标记为待保存
+    if (isApiKeySetting(key)) {
+      setPendingApiKeySave(true)
     }
   }
 
@@ -274,12 +380,9 @@ const Settings: React.FC = () => {
     }
   }
 
-  // 更新设置字段
-  const updateSetting = <K extends keyof UserSettings>(
-    key: K,
-    value: UserSettings[K]
-  ) => {
-    setSettings(prev => ({ ...prev, [key]: value }))
+  // 打开历史记录窗口
+  const handleShowHistory = () => {
+    window.electronAPI.showHistory()
   }
 
   // 更新快捷键
@@ -295,12 +398,19 @@ const Settings: React.FC = () => {
 
   // 添加个人词典词条
   const addDictionaryItem = () => {
-    const item = window.prompt('请输入专有名词或术语:')
-    if (item && item.trim()) {
+    if (newDictionaryItem.trim()) {
       setSettings(prev => ({
         ...prev,
-        personalDictionary: [...prev.personalDictionary, item.trim()]
+        personalDictionary: [...prev.personalDictionary, newDictionaryItem.trim()]
       }))
+      setNewDictionaryItem('')
+    }
+  }
+
+  // 处理回车键添加词条
+  const handleDictionaryKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      addDictionaryItem()
     }
   }
 
@@ -313,9 +423,88 @@ const Settings: React.FC = () => {
   }
 
   // 测试 API Key
-  const testApiKey = async (type: 'groq' | 'deepseek') => {
-    showMessage('success', '正在测试...')
-    // 实际测试逻辑需要在主进程中实现
+  const testApiKey = async (type: 'groq' | 'openai' | 'deepseek' | 'qwen') => {
+    showMessage('success', '正在测试连接...')
+
+    try {
+      let result: { success: boolean; message: string }
+
+      if (type === 'groq') {
+        // 测试 Groq API
+        const apiKey = settings.groqApiKey
+        if (!apiKey) {
+          showMessage('error', '请先输入 API Key')
+          return
+        }
+        // 调用测试接口（使用轻量级的模型列表接口）
+        const response = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        })
+        if (response.ok) {
+          showMessage('success', 'Groq API Key 验证成功！')
+        } else {
+          showMessage('error', `API Key 无效 (${response.status})`)
+        }
+      } else if (type === 'openai') {
+        // 测试 OpenAI API
+        const apiKey = settings.openaiApiKey
+        if (!apiKey) {
+          showMessage('error', '请先输入 API Key')
+          return
+        }
+        const response = await fetch('https://api.openai.com/v1/models', {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        })
+        if (response.ok) {
+          showMessage('success', 'OpenAI API Key 验证成功！')
+        } else {
+          const data = await response.json()
+          showMessage('error', `API Key 无效: ${data.error?.message || response.statusText}`)
+        }
+      } else if (type === 'deepseek') {
+        // 测试 DeepSeek API
+        const apiKey = settings.deepseekApiKey
+        if (!apiKey) {
+          showMessage('error', '请先输入 API Key')
+          return
+        }
+        const response = await fetch('https://api.deepseek.com/v1/models', {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        })
+        if (response.ok) {
+          showMessage('success', 'DeepSeek API Key 验证成功！')
+        } else {
+          const data = await response.json()
+          showMessage('error', `API Key 无效: ${data.error?.message || response.statusText}`)
+        }
+      } else if (type === 'qwen') {
+        // 测试千问 API
+        const apiKey = settings.qwenApiKey
+        if (!apiKey) {
+          showMessage('error', '请先输入 API Key')
+          return
+        }
+        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/models', {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        })
+        if (response.ok) {
+          showMessage('success', '千问 API Key 验证成功！')
+        } else {
+          const data = await response.json()
+          showMessage('error', `API Key 无效: ${data.error?.message || response.statusText}`)
+        }
+      }
+    } catch (error) {
+      showMessage('error', `网络错误: ${(error as Error).message}`)
+    }
   }
 
   return (
@@ -327,9 +516,20 @@ const Settings: React.FC = () => {
           BeautifulInput 设置
         </h1>
         <div className="header-actions">
-          {hasChanges && (
-            <span className="unsaved-indicator">有未保存的更改</span>
+          {saveStatus === 'saved' && (
+            <span className="save-indicator">✓ 已自动保存</span>
           )}
+          {saveStatus === 'saving' && (
+            <span className="save-indicator saving">正在保存...</span>
+          )}
+          <button
+            className="btn btn-secondary"
+            onClick={handleShowHistory}
+            title="查看历史记录"
+          >
+            <Clock className="btn-icon" />
+            历史记录
+          </button>
           <button
             className="btn btn-secondary"
             onClick={handleReset}
@@ -338,23 +538,34 @@ const Settings: React.FC = () => {
             <RotateCcw className="btn-icon" />
             重置
           </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-          >
-            {saving ? (
-              <>
-                <div className="spinner" />
-                保存中...
-              </>
-            ) : (
-              <>
-                <Save className="btn-icon" />
-                保存
-              </>
-            )}
-          </button>
+          {saveStatus === 'idle' && !hasChanges ? (
+            <button className="btn btn-primary" disabled>
+              <Check className="btn-icon" />
+              已保存
+            </button>
+          ) : saveStatus === 'saving' ? (
+            <button className="btn btn-primary" disabled>
+              <div className="spinner" />
+              保存中...
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={handleSave}
+            >
+              {hasChanges ? (
+                <>
+                  <Save className="btn-icon" />
+                  立即保存
+                </>
+              ) : (
+                <>
+                  <Check className="btn-icon" />
+                  已保存
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -409,123 +620,205 @@ const Settings: React.FC = () => {
           <div className="settings-section">
             <h2>API 配置</h2>
             <p className="section-description">
-              配置 Groq 和 DeepSeek 的 API Key 以使用语音识别和 AI 处理功能
+              配置语音识别和 AI 处理服务的 API Key。所有数据均经过加密存储，仅用于与各服务提供商的 API 通信。
             </p>
 
-            {/* Groq API Key */}
-            <div className="form-group">
-              <label>
-                <Key className="label-icon" />
-                Groq API Key
-                <span className="required">*</span>
-              </label>
-              <div className="input-group">
-                <input
-                  type={showGroqKey ? 'text' : 'password'}
-                  value={settings.groqApiKey}
-                  onChange={e => updateSetting('groqApiKey', e.target.value)}
-                  placeholder="输入 Groq API Key"
-                />
-                <button
-                  className="input-action"
-                  onClick={() => setShowGroqKey(!showGroqKey)}
+            {/* 语音识别服务模块 */}
+            <div className="api-module">
+              <h3 className="module-title">
+                <Volume2 className="module-icon" />
+                语音识别服务
+              </h3>
+              <p className="module-description">
+                用于将语音转换为文本，支持多种识别引擎
+              </p>
+
+              {/* 语音服务提供商选择 */}
+              <div className="form-group">
+                <label>
+                  <Key className="label-icon" />
+                  语音服务提供商
+                </label>
+                <select
+                  value={settings.asrProvider}
+                  onChange={e => updateSetting('asrProvider', e.target.value as 'groq' | 'openai')}
                 >
-                  {showGroqKey ? <EyeOff /> : <Eye />}
-                </button>
-                <button
-                  className="input-action test-btn"
-                  onClick={() => testApiKey('groq')}
-                >
-                  测试
-                </button>
+                  <option value="groq">Groq (Whisper Large V3)</option>
+                  <option value="openai">OpenAI (Whisper)</option>
+                </select>
+                <span className="help-text">
+                  选择用于语音识别的服务提供商
+                </span>
               </div>
-              <span className="help-text">
-                用于语音识别，<a href="https://console.groq.com" target="_blank" rel="noopener">获取 API Key</a>
-              </span>
+
+              {/* Groq API Key */}
+              {settings.asrProvider === 'groq' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    Groq API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type={showGroqKey ? 'text' : 'password'}
+                      value={settings.groqApiKey}
+                      onChange={e => updateSetting('groqApiKey', e.target.value)}
+                      onBlur={() => handleApiKeyBlur('groqApiKey', settings.groqApiKey)}
+                      placeholder="输入 Groq API Key"
+                    />
+                    <button
+                      className="input-action"
+                      onClick={() => setShowGroqKey(!showGroqKey)}
+                    >
+                      {showGroqKey ? <EyeOff /> : <Eye />}
+                    </button>
+                    <button
+                      className="input-action test-btn"
+                      onClick={() => testApiKey('groq')}
+                    >
+                      测试
+                    </button>
+                  </div>
+                  <span className="help-text">
+                    使用 Groq Whisper Large V3 模型进行语音识别，<a href="https://console.groq.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
+
+              {/* OpenAI API Key */}
+              {settings.asrProvider === 'openai' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    OpenAI API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type={showOpenaiKey ? 'text' : 'password'}
+                      value={settings.openaiApiKey}
+                      onChange={e => updateSetting('openaiApiKey', e.target.value)}
+                      onBlur={() => handleApiKeyBlur('openaiApiKey', settings.openaiApiKey)}
+                      placeholder="输入 OpenAI API Key"
+                    />
+                    <button
+                      className="input-action"
+                      onClick={() => setShowOpenaiKey(!showOpenaiKey)}
+                    >
+                      {showOpenaiKey ? <EyeOff /> : <Eye />}
+                    </button>
+                    <button
+                      className="input-action test-btn"
+                      onClick={() => testApiKey('openai')}
+                    >
+                      测试
+                    </button>
+                  </div>
+                  <span className="help-text">
+                    使用 OpenAI Whisper 模型进行语音识别，<a href="https://platform.openai.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* DeepSeek API Key */}
-            <div className="form-group">
-              <label>
-                <Key className="label-icon" />
-                DeepSeek API Key
-                <span className="required">*</span>
-              </label>
-              <div className="input-group">
-                <input
-                  type={showDeepseekKey ? 'text' : 'password'}
-                  value={settings.deepseekApiKey}
-                  onChange={e => updateSetting('deepseekApiKey', e.target.value)}
-                  placeholder="输入 DeepSeek API Key"
-                />
-                <button
-                  className="input-action"
-                  onClick={() => setShowDeepseekKey(!showDeepseekKey)}
-                >
-                  {showDeepseekKey ? <EyeOff /> : <Eye />}
-                </button>
-                <button
-                  className="input-action test-btn"
-                  onClick={() => testApiKey('deepseek')}
-                >
-                  测试
-                </button>
-              </div>
-              <span className="help-text">
-                用于 AI 文本处理，<a href="https://platform.deepseek.com" target="_blank" rel="noopener">获取 API Key</a>
-              </span>
-            </div>
+            {/* AI 处理服务模块 */}
+            <div className="api-module">
+              <h3 className="module-title">
+                <Palette className="module-icon" />
+                AI 处理服务
+              </h3>
+              <p className="module-description">
+                用于文本清理、格式化、翻译等 AI 处理功能
+              </p>
 
-            {/* 千问 API Key */}
-            <div className="form-group">
-              <label>
-                <Key className="label-icon" />
-                千问 API Key
-                <span className="required">*</span>
-              </label>
-              <div className="input-group">
-                <input
-                  type={showQwenKey ? 'text' : 'password'}
-                  value={settings.qwenApiKey}
-                  onChange={e => updateSetting('qwenApiKey', e.target.value)}
-                  placeholder="输入千问 API Key"
-                />
-                <button
-                  className="input-action"
-                  onClick={() => setShowQwenKey(!showQwenKey)}
+              {/* AI 服务提供商选择 */}
+              <div className="form-group">
+                <label>
+                  <Key className="label-icon" />
+                  AI 服务提供商
+                </label>
+                <select
+                  value={settings.aiProvider}
+                  onChange={e => updateSetting('aiProvider', e.target.value as 'deepseek' | 'qwen')}
                 >
-                  {showQwenKey ? <EyeOff /> : <Eye />}
-                </button>
-                <button
-                  className="input-action test-btn"
-                  onClick={() => {
-                    showMessage('success', '测试功能开发中')
-                  }}
-                >
-                  测试
-                </button>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="qwen">千问 (通义千问)</option>
+                </select>
+                <span className="help-text">
+                  选择用于 AI 文本处理的服务提供商
+                </span>
               </div>
-              <span className="help-text">
-                用于 AI 文本处理（阿里云通义千问），<a href="https://dashscope.aliyun.com" target="_blank" rel="noopener">获取 API Key</a>
-              </span>
-            </div>
 
-            {/* AI 服务提供商选择 */}
-            <div className="form-group">
-              <label>
-                <Key className="label-icon" />
-                AI 服务提供商
-              </label>
-              <select
-                value={settings.aiProvider}
-                onChange={e => updateSetting('aiProvider', e.target.value as 'deepseek' | 'qwen')}
-              >
-                <option value="deepseek">DeepSeek</option>
-                <option value="qwen">千问 (通义千问)</option>
-              </select>
-              <span className="help-text">
-                选择用于 AI 文本处理的服务提供商
-              </span>
+              {/* DeepSeek API Key */}
+              {settings.aiProvider === 'deepseek' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    DeepSeek API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type={showDeepseekKey ? 'text' : 'password'}
+                      value={settings.deepseekApiKey}
+                      onChange={e => updateSetting('deepseekApiKey', e.target.value)}
+                      onBlur={() => handleApiKeyBlur('deepseekApiKey', settings.deepseekApiKey)}
+                      placeholder="输入 DeepSeek API Key"
+                    />
+                    <button
+                      className="input-action"
+                      onClick={() => setShowDeepseekKey(!showDeepseekKey)}
+                    >
+                      {showDeepseekKey ? <EyeOff /> : <Eye />}
+                    </button>
+                    <button
+                      className="input-action test-btn"
+                      onClick={() => testApiKey('deepseek')}
+                    >
+                      测试
+                    </button>
+                  </div>
+                  <span className="help-text">
+                    用于 AI 文本处理，<a href="https://platform.deepseek.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
+
+              {/* 千问 API Key */}
+              {settings.aiProvider === 'qwen' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    千问 API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type={showQwenKey ? 'text' : 'password'}
+                      value={settings.qwenApiKey}
+                      onChange={e => updateSetting('qwenApiKey', e.target.value)}
+                      onBlur={() => handleApiKeyBlur('qwenApiKey', settings.qwenApiKey)}
+                      placeholder="输入千问 API Key"
+                    />
+                    <button
+                      className="input-action"
+                      onClick={() => setShowQwenKey(!showQwenKey)}
+                    >
+                      {showQwenKey ? <EyeOff /> : <Eye />}
+                    </button>
+                    <button
+                      className="input-action test-btn"
+                      onClick={() => testApiKey('qwen')}
+                    >
+                      测试
+                    </button>
+                  </div>
+                  <span className="help-text">
+                    阿里云通义千问 API Key，<a href="https://dashscope.aliyun.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -580,23 +873,53 @@ const Settings: React.FC = () => {
 
             {/* 静音持续时间设置 */}
             {settings.autoStopRecording.enabled && (
-              <div className="form-group">
-                <label>
-                  <Volume2 className="label-icon" />
-                  静音持续时间 (毫秒)
-                </label>
-                <input
-                  type="number"
-                  min="1000"
-                  max="30000"
-                  step="500"
-                  value={settings.autoStopRecording.vadSilenceDuration}
-                  onChange={e => updateSetting('autoStopRecording', { ...settings.autoStopRecording, vadSilenceDuration: parseInt(e.target.value) || 5000 })}
-                />
-                <span className="help-text">
-                  检测到静音后，持续此时间将自动停止录音 (1000-30000 毫秒)
-                </span>
-              </div>
+              <>
+                <div className="form-group">
+                  <label>
+                    <Volume2 className="label-icon" />
+                    静音持续时间 (秒)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    step="0.5"
+                    value={settings.autoStopRecording.vadSilenceDuration / 1000}
+                    onChange={e => updateSetting('autoStopRecording', {
+                      ...settings.autoStopRecording,
+                      vadSilenceDuration: Math.round((parseFloat(e.target.value) || 3.5) * 1000)
+                    })}
+                  />
+                  <span className="help-text">
+                    检测到静音后，持续此时间将自动停止录音（1-30 秒，默认 3.5 秒）
+                  </span>
+                </div>
+
+                {/* 静音检测灵敏度 */}
+                <div className="form-group">
+                  <label>
+                    <Volume2 className="label-icon" />
+                    静音检测灵敏度
+                  </label>
+                  <div className="range-group">
+                    <input
+                      type="range"
+                      min="0.005"
+                      max="0.03"
+                      step="0.001"
+                      value={settings.autoStopRecording.vadSilenceThreshold ?? 0.008}
+                      onChange={e => updateSetting('autoStopRecording', {
+                        ...settings.autoStopRecording,
+                        vadSilenceThreshold: parseFloat(e.target.value)
+                      })}
+                    />
+                    <span>{settings.autoStopRecording.vadSilenceThreshold ?? 0.008}</span>
+                  </div>
+                  <span className="help-text">
+                    数值越小越灵敏，但可能误判环境噪音。建议范围：0.006-0.025，当前默认：0.008
+                  </span>
+                </div>
+              </>
             )}
 
             {/* 语调风格 */}
@@ -653,9 +976,23 @@ const Settings: React.FC = () => {
                     </button>
                   </div>
                 ))}
-                <button className="add-btn" onClick={addDictionaryItem}>
-                  + 添加词条
-                </button>
+                <div className="dictionary-input-group">
+                  <input
+                    type="text"
+                    value={newDictionaryItem}
+                    onChange={(e) => setNewDictionaryItem(e.target.value)}
+                    onKeyPress={handleDictionaryKeyPress}
+                    placeholder="输入专有名词或术语"
+                    className="dictionary-input"
+                  />
+                  <button
+                    className="add-dict-btn"
+                    onClick={addDictionaryItem}
+                    disabled={!newDictionaryItem.trim()}
+                  >
+                    添加
+                  </button>
+                </div>
               </div>
               <span className="help-text">
                 添加专有名词和术语，提高语音识别准确率
@@ -762,18 +1099,6 @@ const Settings: React.FC = () => {
                   语音翻译时，翻译成的目标语言
                 </span>
               </div>
-            </div>
-
-            {/* 功能开关 */}
-            <div className="form-group checkbox">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.enableTranslation}
-                  onChange={e => updateSetting('enableTranslation', e.target.checked)}
-                />
-                启用翻译功能
-              </label>
             </div>
           </div>
         )}

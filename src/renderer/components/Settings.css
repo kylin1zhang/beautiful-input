@@ -16,13 +16,17 @@ body {
   padding: 24px;
 }
 
-/* 标题栏 */
+/* 标题栏 - 固定在顶部 */
 .settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  padding: 16px 24px;
+  margin: -24px -24px 20px -24px;
+  background: white;
   border-bottom: 1px solid #e5e5e5;
 }
 
@@ -51,6 +55,20 @@ body {
   font-size: 13px;
   color: #F59E0B;
   font-weight: 500;
+}
+
+/* 保存状态指示器 */
+.save-indicator {
+  font-size: 13px;
+  color: #10B981;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.save-indicator.saving {
+  color: #3B82F6;
 }
 
 /* 按钮 */
@@ -111,40 +129,58 @@ body {
   }
 }
 
-/* 消息提示 */
+/* 消息提示 - Toast 样式，固定在右下角 */
 .message {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  animation: slideIn 0.3s ease;
+  padding: 14px 18px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideInRight 0.3s ease;
+  min-width: 280px;
+  max-width: 400px;
 }
 
 .message.success {
-  background: #d1fae5;
-  color: #065f46;
+  background: #065f46;
+  color: white;
 }
 
 .message.error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #991b1b;
+  color: white;
 }
 
 .message-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
-@keyframes slideIn {
+@keyframes slideInRight {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateX(50px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(50px);
   }
 }
 
@@ -442,6 +478,53 @@ body {
   background: #eff6ff;
 }
 
+/* 个人词典输入组 */
+.dictionary-input-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  flex: 1;
+}
+
+.dictionary-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px dashed #d1d5db;
+  border-radius: 16px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.dictionary-input:focus {
+  border-color: #3B82F6;
+  border-style: solid;
+}
+
+.dictionary-input::placeholder {
+  color: #9ca3af;
+}
+
+.add-dict-btn {
+  padding: 4px 12px;
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-dict-btn:hover:not(:disabled) {
+  background: #2563EB;
+}
+
+.add-dict-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* 响应式 */
 @media (max-width: 640px) {
   .settings-container {
@@ -462,4 +545,78 @@ body {
     flex: none;
     padding: 8px 12px;
   }
+}
+
+/* API 模块样式 */
+.api-module {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.api-module:last-child {
+  margin-bottom: 0;
+}
+
+.module-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+
+.module-icon {
+  width: 20px;
+  height: 20px;
+  color: #3B82F6;
+}
+
+.module-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.api-module .form-group {
+  margin-bottom: 16px;
+}
+
+.api-module .form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* 快捷键输入组 */
+.shortcut-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.shortcut-input-group input {
+  flex: 1;
+}
+
+.record-btn {
+  width: 40px;
+}
+
+.record-btn.recording {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.record-btn.recording svg {
+  color: #EF4444;
+}
+
+.error-text {
+  color: #EF4444;
+}
+
+.recording-hint {
+  color: #3B82F6;
 }

@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
 
-REM Typeless 项目设置脚本 (Windows)
+REM BeautifulInput 项目设置脚本 (Windows)
 
-echo 🚀 Typeless 项目设置
+echo 🚀 BeautifulInput 项目设置
 echo ====================
 echo.
 

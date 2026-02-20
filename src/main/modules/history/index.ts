@@ -220,7 +220,7 @@ export class HistoryModule extends EventEmitter {
    */
   private formatAsMarkdown(): string {
     const lines: string[] = [
-      '# Typeless 历史记录',
+      '# BeautifulInput 历史记录',
       '',
       `导出时间: ${new Date().toLocaleString('zh-CN')}`,
       `总记录数: ${this.history.length}`,
@@ -259,7 +259,7 @@ export class HistoryModule extends EventEmitter {
    */
   private formatAsText(): string {
     const lines: string[] = [
-      'Typeless 历史记录',
+      'BeautifulInput 历史记录',
       '',
       `导出时间: ${new Date().toLocaleString('zh-CN')}`,
       `总记录数: ${this.history.length}`,

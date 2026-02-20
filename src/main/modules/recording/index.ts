@@ -115,6 +115,7 @@ export class RecordingModule extends EventEmitter {
   async startRecording(autoStopOptions?: {
     enableVAD: boolean
     vadSilenceDuration: number
+    vadSilenceThreshold?: number
   }): Promise<void> {
     if (this.isRecording) {
       throw new Error('正在录音中')
@@ -127,7 +128,7 @@ export class RecordingModule extends EventEmitter {
     // 初始化 VAD 模块
     if (autoStopOptions?.enableVAD) {
       this.vadModule = new VADModule({
-        silenceThreshold: 0.04,
+        silenceThreshold: autoStopOptions.vadSilenceThreshold ?? 0.008,
         silenceDuration: autoStopOptions.vadSilenceDuration,
         minRecordingDuration: 3000
       })

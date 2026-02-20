@@ -3,7 +3,7 @@ export const API_CONFIG = {
   GROQ: {
     BASE_URL: 'https://api.groq.com/openai/v1',
     WHISPER_MODEL: 'whisper-large-v3',
-    MAX_FILE_SIZE: 25 * 1024 * 1024, // 25MB
+    MAX_FILE_SIZE: 60 * 1024 * 1024, // 60MB (支持30分钟录音)
     SUPPORTED_FORMATS: ['flac', 'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'wav', 'webm']
   },
   DEEPSEEK: {
@@ -25,7 +25,7 @@ export const RECORDING_CONFIG = {
   SAMPLE_RATE: 16000,
   CHANNELS: 1,
   BIT_DEPTH: 16,
-  MAX_DURATION: 600, // 10分钟（秒）
+  MAX_DURATION: 1800, // 30分钟（秒）
   MIN_DURATION: 1,   // 1秒（秒）
   CHUNK_SIZE: 1024   // 音频块大小
 } as const
