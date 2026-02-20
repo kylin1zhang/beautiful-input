@@ -52,3 +52,6 @@ Thumbs.db
 
 # Local configuration
 config.local.json
+
+# Windows special files
+nul

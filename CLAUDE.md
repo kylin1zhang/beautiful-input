@@ -54,11 +54,25 @@ Services are under `src/main/services/` for external API integrations (Groq, Qwe
 ### Multi-Window System
 
 The app manages multiple BrowserWindows:
-- **Float Ball** (80x80px, transparent, frameless): draggable recording control
+- **Float Ball** (41x41px, transparent, frameless): draggable recording control
 - **Settings Window**: Configuration panel
 - **History Window**: Past recordings viewer
 
 Windows are created on-demand and destroyed when closed (except float ball which persists).
+
+### Float Ball Interaction
+
+悬浮球采用分层交互模式：
+- **拖动**: 点击悬浮球边缘区域（非图标部分）可拖动
+- **录音**: 点击中间麦克风图标开始/停止录音
+- **右键**: 右键点击打开设置窗口
+- **快捷键**: `Alt+Shift+O` 开始/停止录音，`Alt+Shift+T` 快速翻译
+
+技术实现：
+- 使用 `-webkit-app-region: drag` CSS 属性实现窗口拖动
+- 使用 `-webkit-app-region: no-drag` 让图标区域可点击
+- 悬浮球位置保存在 electron-store，启动时恢复上次位置
+- 边界约束确保悬浮球不会被拖出屏幕可视区域
 
 ### Path Aliases
 
@@ -84,14 +98,30 @@ All IPC channels are defined in `IpcChannels` enum in `@shared/types/index.ts`. 
 - Error messages are localized for common issues (API key not configured, network errors, etc.)
 
 **Float Ball Dragging**:
-- Uses `-webkit-app-region: drag` CSS on the container
-- Icon uses `-webkit-app-region: no-drag` + `pointer-events: none` to remain clickable
+- 分层设计：背景层（drag-area）可拖动，图标层（click-area）可点击
+- CSS 实现：`.drag-area { -webkit-app-region: drag }` 和 `.click-area { -webkit-app-region: no-drag }`
+- 尺寸：悬浮球 41x41px，点击区域 28x28px
 
 ### UI Notes
 
-- The float ball must have no `box-shadow` (causes square border on Windows)
-- Background must be fully transparent (`backgroundColor: '#00000000'` in window config)
-- All window positions persist in electron-store
+- 悬浮球颜色：统一使用渐变 `linear-gradient(135deg, #6366F1, #8B5CF6)`
+- 悬浮球必须有 no `box-shadow`（Windows 上会导致方形边框）
+- 背景必须完全透明（`backgroundColor: '#00000000'`）
+- 所有窗口位置持久化到 electron-store
+
+### Voice Activity Detection (VAD)
+
+录音模块包含 VAD 自动停止功能：
+- 实时监测音频能量，检测静音片段
+- 默认配置：静音阈值 0.01，静音时长 3.5 秒后自动停止
+- 用户可在设置中启用/禁用 VAD 自动停止
+- 配置项：`vadEnabled`、`vadSilenceThreshold`、`vadSilenceDuration`
+
+### Components
+
+- **MicIcon** (`src/renderer/components/MicIcon.tsx`): 自定义麦克风 SVG 图标组件
+  - 支持自定义 size 和 className
+  - 颜色通过 CSS `currentColor` 继承
 
 ## Testing Notes
 
