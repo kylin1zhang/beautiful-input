@@ -550,6 +550,7 @@ async function stopRecording(): Promise<void> {
     const settings = settingsModule.getSettings()
     console.log('[Main] 当前设置:', JSON.stringify({
       asrProvider: settings.asrProvider,
+      localModel: settings.localModel,
       groqApiKey: settings.groqApiKey ? `已配置 (${settings.groqApiKey.substring(0, 10)}...)` : '未配置',
       openaiApiKey: settings.openaiApiKey ? `已配置 (${settings.openaiApiKey.substring(0, 10)}...)` : '未配置',
       deepseekApiKey: settings.deepseekApiKey ? `已配置 (${settings.deepseekApiKey.substring(0, 10)}...)` : '未配置',
@@ -560,7 +561,7 @@ async function stopRecording(): Promise<void> {
     let transcriptionResult
 
     // 根据选择的 ASR 提供商进行语音识别
-    if (settings.asrProvider === 'local' && settings.localModel?.enabled) {
+    if (settings.asrProvider === 'local') {
       // 使用本地模型
       console.log('[Main] 使用本地模型进行语音识别')
 
@@ -575,7 +576,8 @@ async function stopRecording(): Promise<void> {
         settings.localModel.selectedModel,
         settings.hardwareInfo,
         settings.localModel.language,
-        settings.localModel.threads
+        settings.localModel.threads,
+        settings.personalDictionary  // 传递个性化字典
       )
     } else {
       // 使用 API
@@ -871,7 +873,7 @@ async function stopTranslateRecording(): Promise<void> {
     let transcriptionResult
 
     // 根据选择的 ASR 提供商进行语音识别
-    if (settings.asrProvider === 'local' && settings.localModel?.enabled) {
+    if (settings.asrProvider === 'local') {
       // 使用本地模型
       console.log('[Main] 使用本地模型进行语音识别')
 
@@ -886,7 +888,8 @@ async function stopTranslateRecording(): Promise<void> {
         settings.localModel.selectedModel,
         settings.hardwareInfo,
         settings.localModel.language,
-        settings.localModel.threads
+        settings.localModel.threads,
+        settings.personalDictionary  // 传递个性化字典
       )
     } else {
       // 使用 API
@@ -1138,13 +1141,8 @@ function registerIpcHandlers(): void {
     return modelManager.isWhisperInstalled()
   })
 
-  ipcMain.handle(IpcChannels.DOWNLOAD_WHISPER, async () => {
-    return modelManager.downloadWhisper()
-  })
-
-  ipcMain.handle(IpcChannels.CANCEL_WHISPER_DOWNLOAD, () => {
-    modelManager.cancelWhisperDownload()
-    return true
+  ipcMain.handle(IpcChannels.INSTALL_WHISPER, async () => {
+    return modelManager.installWhisperFromResources()
   })
 }
 
@@ -1168,44 +1166,30 @@ app.whenReady().then(async () => {
   modelManager = new ModelManager()
   localTranscriber = new LocalTranscriber()
 
-  // 监听模型下载进度，转发到渲染进程
+  // 监听模型下载进度，转发到渲染进程（同时发送到设置窗口）
   modelManager.on('download-progress', (data) => {
-    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+    const progressData = {
       ...data,
       status: 'downloading'
-    })
+    }
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
+    settingsWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
   })
   modelManager.on('download-complete', (data) => {
-    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+    const progressData = {
       ...data,
       status: 'completed'
-    })
+    }
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
+    settingsWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
   })
   modelManager.on('download-error', (data) => {
-    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+    const progressData = {
       ...data,
       status: 'error'
-    })
-  })
-
-  // 监听 Whisper 下载进度，转发到渲染进程
-  modelManager.on('whisper-download-progress', (data) => {
-    floatWindow?.webContents.send(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, {
-      ...data,
-      status: data.status || 'downloading'
-    })
-  })
-  modelManager.on('whisper-download-complete', (data) => {
-    floatWindow?.webContents.send(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, {
-      ...data,
-      status: 'completed'
-    })
-  })
-  modelManager.on('whisper-download-error', (data) => {
-    floatWindow?.webContents.send(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, {
-      ...data,
-      status: 'error'
-    })
+    }
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
+    settingsWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
   })
 
   // 创建窗口
@@ -1214,6 +1198,15 @@ app.whenReady().then(async () => {
 
   // 注册 IPC 处理器
   registerIpcHandlers()
+
+  // 自动安装 Whisper（从资源目录）
+  modelManager.ensureWhisperInstalled().then(installed => {
+    if (installed) {
+      console.log('[Main] Whisper 已就绪')
+    } else {
+      console.log('[Main] Whisper 未安装，请将 whisper-bin-x64.zip 放在 resources/whisper/ 目录')
+    }
+  })
 
   // 注册全局快捷键
   const settings = settingsModule.getSettings()

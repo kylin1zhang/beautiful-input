@@ -795,3 +795,59 @@ body {
 .whisper-status .btn {
   margin-top: 8px;
 }
+
+/* 手动下载说明样式 */
+.manual-download {
+  width: 100%;
+}
+
+.download-steps {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.download-steps ol {
+  margin: 8px 0 0 20px;
+  padding: 0;
+}
+
+.download-steps li {
+  margin: 6px 0;
+  line-height: 1.5;
+}
+
+.download-steps code {
+  background: #e5e7eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.path-hint {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #1e293b;
+  color: #22c55e;
+  border-radius: 4px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.hint-text {
+  color: #6b7280;
+  font-size: 12px;
+  margin: 4px 0 0 0;
+}
+
+.download-steps a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.download-steps a:hover {
+  text-decoration: underline;
+}

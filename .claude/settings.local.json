@@ -39,7 +39,10 @@
       "Bash(npx skills add:*)",
       "Bash(npx playwright test:*)",
       "Bash(start playwright-report/index.html)",
-      "Bash(timeout /t:*)"
+      "Bash(timeout /t:*)",
+      "Bash(ping:*)",
+      "Bash(\"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-bin\\\\Release\\\\whisper-cli.exe\" --help)",
+      "Bash(\"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-bin\\\\Release\\\\whisper-cli.exe\" -m \"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-models\\\\ggml-base.bin\" -l zh -t 4)"
     ]
   }
 }

@@ -60,7 +60,7 @@ export class InputSimulatorModule extends EventEmitter {
       console.log('[Input Simulator] 验证剪贴板内容:', verifyClipboard.substring(0, 20) + '...')
 
       // 等待剪贴板写入完成
-      await new Promise(resolve => setTimeout(resolve, 150))
+      await new Promise(resolve => setTimeout(resolve, 200))
 
       // Windows 平台使用多种方法确保粘贴
       if (platform() === 'win32') {
@@ -70,7 +70,7 @@ export class InputSimulatorModule extends EventEmitter {
         // 方法1: 使用 PowerShell VBScript SendKeys（最可靠）
         try {
           console.log('[Input Simulator] 尝试方法1: PowerShell SendKeys')
-          execSync('powershell -Command "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys(\'^(v)\')"', { timeout: 2000 })
+          execSync('powershell -Command "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys(\'^(v)\')"', { timeout: 3000 })
           console.log('[Input Simulator] PowerShell SendKeys 执行成功')
           pasteSuccess = true
         } catch (err) {
@@ -81,7 +81,7 @@ export class InputSimulatorModule extends EventEmitter {
         if (!pasteSuccess) {
           try {
             console.log('[Input Simulator] 尝试方法2: mshta VBScript')
-            execSync('mshta vbscript:ExecuteCode("Set WShell=CreateObject(\"\"WScript.Shell\"\"):WShell.SendKeys \"\"^v\"\":self.close\""\")', { timeout: 2000 })
+            execSync('mshta vbscript:ExecuteCode("Set WShell=CreateObject(\"\"WScript.Shell\"\"):WShell.SendKeys \"\"^v\"\":self.close\""\")', { timeout: 3000 })
             console.log('[Input Simulator] mshta 执行成功')
             pasteSuccess = true
           } catch (err) {
@@ -93,8 +93,8 @@ export class InputSimulatorModule extends EventEmitter {
           throw new Error('所有粘贴方法都失败')
         }
 
-        // 等待粘贴操作完成
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // 等待粘贴操作完成（增加等待时间）
+        await new Promise(resolve => setTimeout(resolve, 500))
       } else {
         // macOS/Linux 平台
         console.log('[Input Simulator] 非 Windows 平台，暂不支持自动粘贴')
@@ -102,6 +102,7 @@ export class InputSimulatorModule extends EventEmitter {
       }
 
       // 恢复原始剪贴板内容
+      await new Promise(resolve => setTimeout(resolve, 100))
       clipboard.writeText(originalClipboard)
       console.log('[Input Simulator] 已恢复原始剪贴板内容')
 

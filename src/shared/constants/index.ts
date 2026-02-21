@@ -101,7 +101,7 @@ export const ERROR_MESSAGES = {
 
 // AI 提示词模板
 export const AI_PROMPTS = {
-  CLEAN: `你是文本清理助手。请分析文本类型并分别处理：
+  CLEAN: `你是文本处理助手。请分析文本类型并分别处理：
 
 【判断标准】
 - 引用/原文：包含引号、书名号、作者标注，或明显是名言/格言/诗词
@@ -113,28 +113,27 @@ export const AI_PROMPTS = {
 - 完全保持原样，不做任何修改
 - 保留所有标点符号、格式、用词
 
-如果是用户表述：
+如果是用户表述，请执行以下处理：
+
+一、清理口语化内容：
 1. 删除填充词：嗯、啊、那个、就是、然后、呃、这个等
 2. 删除重复内容（如"我我我"、"就是就是"）
 3. 修正明显的语病（如"我想要去去去"→"我想要去"）
-4. 保持原有语气和用词风格
+
+二、结构化整理：
+1. 根据内容自动判断最合适的格式（段落、列表、步骤等）
+2. 添加适当的标点符号，使句子通顺
+3. 如果内容包含多个要点，使用列表或分段呈现
+4. 保持逻辑清晰，保留关键信息
 
 严格禁止：
 - 为用户"总结"或"概括"内容
 - 提供"解决方案"或"建议"
 - 将用户的话改写成"可行的方案"
 - 添加任何新内容
+- 改变原意
 
-直接输出清理后的文本，不要添加任何说明或分类标注。
-
-文本：
-{{text}}`,
-
-  FORMAT: `请将以下文本整理成结构化的格式。要求：
-1. 根据内容自动判断最合适的格式（列表、段落、步骤等）
-2. 使用适当的标题和层级
-3. 保持逻辑清晰
-4. 保留关键信息
+直接输出处理后的文本，不要添加任何说明或分类标注。
 
 文本：
 {{text}}`,
@@ -144,30 +143,6 @@ export const AI_PROMPTS = {
 2. 符合目标语言的表达习惯
 3. 保留专有名词（可适当音译或保留原文）
 4. 保持格式和结构
-
-文本：
-{{text}}`,
-
-  ASSISTANT_SUMMARIZE: `请对以下文本进行总结。要求：
-1. 提取核心要点
-2. 简明扼要
-3. 保持逻辑清晰
-
-文本：
-{{text}}`,
-
-  ASSISTANT_EXPLAIN: `请解释以下文本的内容。要求：
-1. 用通俗易懂的语言
-2. 适当举例说明
-3. 解释专业术语
-
-文本：
-{{text}}`,
-
-  ASSISTANT_EXPAND: `请对以下文本进行扩展。要求：
-1. 增加细节和背景信息
-2. 补充相关知识点
-3. 保持主题一致
 
 文本：
 {{text}}`,
@@ -277,19 +252,23 @@ export const LOCAL_WHISPER_MODELS: Record<string, {
   }
 }
 
-// 国内镜像下载地址
+// 国内镜像下载地址（多个镜像）
 export const LOCAL_WHISPER_MIRROR_URLS: Record<string, string[]> = {
   'base': [
-    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin'
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+    'https://huggingface.co.cn/ggerganov/whisper.cpp/resolve/main/ggml-base.bin'
   ],
   'small': [
-    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small.bin'
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+    'https://huggingface.co.cn/ggerganov/whisper.cpp/resolve/main/ggml-small.bin'
   ],
   'medium': [
-    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin'
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+    'https://huggingface.co.cn/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin'
   ],
   'large-v3': [
-    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin'
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
+    'https://huggingface.co.cn/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin'
   ]
 }
 

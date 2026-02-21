@@ -109,7 +109,7 @@ export interface HistoryItem {
 }
 
 // AI 处理模式
-export type AiProcessingMode = 'clean' | 'format' | 'translate' | 'assistant'
+export type AiProcessingMode = 'clean' | 'translate'
 
 // AI 处理请求
 export interface AiProcessingRequest {
@@ -231,9 +231,7 @@ export enum IpcChannels {
 
   // Whisper 可执行文件相关
   CHECK_WHISPER = 'check-whisper',
-  DOWNLOAD_WHISPER = 'download-whisper',
-  CANCEL_WHISPER_DOWNLOAD = 'cancel-whisper-download',
-  WHISPER_DOWNLOAD_PROGRESS = 'whisper-download-progress'
+  INSTALL_WHISPER = 'install-whisper'
 }
 
 // 支持的语言列表

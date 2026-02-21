@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { createWriteStream, existsSync, statSync, unlinkSync } from 'fs'
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { createWriteStream, existsSync, statSync, unlinkSync, readdirSync } from 'fs'
+import { mkdir, readFile, writeFile, copyFile } from 'fs/promises'
+import { join, dirname } from 'path'
 import { createHash } from 'crypto'
 import { EventEmitter } from 'events'
 import { exec } from 'child_process'
@@ -19,23 +19,6 @@ import {
 } from '@shared/constants/index.js'
 
 const execAsync = promisify(exec)
-
-// Whisper 可执行文件下载配置
-const WHISPER_CPP_RELEASES = {
-  win32: {
-    url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.1/whisper-bin-x64.zip',
-    mirrorUrl: 'https://ghproxy.com/https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.1/whisper-bin-x64.zip',
-    files: ['main.exe', 'whisper.dll']  // zip 中包含的文件
-  },
-  darwin: {
-    url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.1/whisper-bin-x64.zip',
-    files: ['main']
-  },
-  linux: {
-    url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.1/whisper-bin-x64.zip',
-    files: ['main']
-  }
-}
 
 export class ModelManager extends EventEmitter {
   private modelsDir: string
@@ -75,127 +58,101 @@ export class ModelManager extends EventEmitter {
    */
   isWhisperInstalled(): boolean {
     const platform = process.platform as 'win32' | 'darwin' | 'linux'
-    const exeName = platform === 'win32' ? 'main.exe' : 'main'
-    const exePath = join(this.whisperDir, exeName)
-    return existsSync(exePath)
-  }
+    const exeNames = platform === 'win32'
+      ? ['whisper-cli.exe', 'main.exe']
+      : ['whisper-cli', 'main']
 
-  /**
-   * 获取 Whisper 可执行文件路径
-   */
-  getWhisperExecutablePath(): string | null {
-    const platform = process.platform as 'win32' | 'darwin' | 'linux'
-    const exeName = platform === 'win32' ? 'main.exe' : 'main'
-    const exePath = join(this.whisperDir, exeName)
-    if (existsSync(exePath)) {
-      return exePath
-    }
-    return null
-  }
+    // zip 解压后可能在根目录或 Release 子目录
+    for (const exeName of exeNames) {
+      const possiblePaths = [
+        join(this.whisperDir, exeName),
+        join(this.whisperDir, 'Release', exeName)
+      ]
 
-  /**
-   * 下载 Whisper.cpp 可执行文件
-   */
-  async downloadWhisper(): Promise<boolean> {
-    const platform = process.platform as 'win32' | 'darwin' | 'linux'
-    const config = WHISPER_CPP_RELEASES[platform]
-    if (!config) {
-      throw new Error(`不支持的平台: ${platform}`)
-    }
-
-    // 如果已存在，跳过
-    if (this.isWhisperInstalled()) {
-      this.emit('whisper-download-complete', { success: true })
-      return true
-    }
-
-    this.whisperDownloadController = new AbortController()
-
-    // 优先使用镜像
-    const urls = config.mirrorUrl ? [config.mirrorUrl, config.url] : [config.url]
-
-    let lastError: Error | null = null
-
-    for (const url of urls) {
-      try {
-        this.emit('whisper-download-start', { url })
-
-        const zipPath = join(this.whisperDir, 'whisper.zip')
-
-        const response = await axios({
-          method: 'GET',
-          url,
-          responseType: 'arraybuffer',
-          signal: this.whisperDownloadController.signal,
-          timeout: 60000,
-          headers: {
-            'User-Agent': 'BeautifulInput/1.0'
-          },
-          onDownloadProgress: (progressEvent) => {
-            const progress = progressEvent.total
-              ? Math.round((progressEvent.loaded / progressEvent.total) * 100)
-              : 0
-            this.emit('whisper-download-progress', { progress })
-          }
-        })
-
-        // 保存 zip 文件
-        await writeFile(zipPath, Buffer.from(response.data))
-
-        // 解压文件
-        this.emit('whisper-download-progress', { progress: 90, status: 'extracting' })
-
-        if (platform === 'win32') {
-          // Windows 使用 PowerShell 解压
-          await execAsync(`powershell -command "Expand-Archive -Path '${zipPath}' -DestinationPath '${this.whisperDir}' -Force"`)
-        } else {
-          // Linux/macOS 使用 unzip
-          await execAsync(`unzip -o "${zipPath}" -d "${this.whisperDir}"`)
+      for (const path of possiblePaths) {
+        if (existsSync(path)) {
+          return true
         }
-
-        // 删除 zip 文件
-        unlinkSync(zipPath)
-
-        // 设置可执行权限 (Linux/macOS)
-        if (platform !== 'win32') {
-          const mainExe = join(this.whisperDir, 'main')
-          if (existsSync(mainExe)) {
-            await execAsync(`chmod +x "${mainExe}"`)
-          }
-        }
-
-        this.whisperDownloadController = null
-        this.emit('whisper-download-complete', { success: true })
-        return true
-      } catch (error) {
-        lastError = error as Error
-
-        if (axios.isCancel(error)) {
-          this.whisperDownloadController = null
-          this.emit('whisper-download-cancelled', {})
-          return false
-        }
-
-        console.warn(`[ModelManager] 下载 Whisper 失败 (${url}):`, error)
-        continue
       }
     }
 
-    this.whisperDownloadController = null
-    this.emit('whisper-download-error', {
-      error: lastError?.message || '下载失败'
-    })
-    throw lastError || new Error('下载失败')
+    return false
   }
 
   /**
-   * 取消 Whisper 下载
+   * 从项目资源目录安装 Whisper
+   * 开发者需要把 whisper-bin-x64.zip 放在 resources/whisper/ 目录下
    */
-  cancelWhisperDownload(): void {
-    if (this.whisperDownloadController) {
-      this.whisperDownloadController.abort()
-      this.whisperDownloadController = null
+  async installWhisperFromResources(): Promise<boolean> {
+    // 如果已安装，跳过
+    if (this.isWhisperInstalled()) {
+      console.log('[ModelManager] Whisper 已安装')
+      return true
     }
+
+    const platform = process.platform as 'win32' | 'darwin' | 'linux'
+
+    // 资源文件路径（开发和生产环境）
+    // 开发环境：dist/main/ -> ../../resources/whisper/
+    // 生产环境：process.resourcesPath/whisper/
+    const devResourcePath = join(__dirname, '../../resources/whisper/whisper-bin-x64.zip')
+    const prodResourcePath = join(process.resourcesPath, 'whisper/whisper-bin-x64.zip')
+
+    let zipPath: string | null = null
+
+    if (existsSync(devResourcePath)) {
+      zipPath = devResourcePath
+    } else if (existsSync(prodResourcePath)) {
+      zipPath = prodResourcePath
+    }
+
+    if (!zipPath) {
+      console.error('[ModelManager] 未找到 Whisper 资源文件')
+      console.log('请将 whisper-bin-x64.zip 放在 resources/whisper/ 目录下')
+      return false
+    }
+
+    console.log('[ModelManager] 从资源目录安装 Whisper:', zipPath)
+
+    try {
+      // 复制 zip 到临时目录
+      const tempZip = join(this.whisperDir, 'whisper.zip')
+      await copyFile(zipPath, tempZip)
+
+      // 解压
+      if (platform === 'win32') {
+        await execAsync(`powershell -command "Expand-Archive -Path '${tempZip}' -DestinationPath '${this.whisperDir}' -Force"`)
+      } else {
+        await execAsync(`unzip -o "${tempZip}" -d "${this.whisperDir}"`)
+      }
+
+      // 删除 zip
+      unlinkSync(tempZip)
+
+      // 设置可执行权限
+      if (platform !== 'win32') {
+        const mainExe = join(this.whisperDir, 'main')
+        if (existsSync(mainExe)) {
+          await execAsync(`chmod +x "${mainExe}"`)
+        }
+      }
+
+      console.log('[ModelManager] Whisper 安装成功')
+      return true
+    } catch (error) {
+      console.error('[ModelManager] Whisper 安装失败:', error)
+      return false
+    }
+  }
+
+  /**
+   * 确保 Whisper 已安装（从资源目录自动安装）
+   */
+  async ensureWhisperInstalled(): Promise<boolean> {
+    if (this.isWhisperInstalled()) {
+      return true
+    }
+    return this.installWhisperFromResources()
   }
 
   /**

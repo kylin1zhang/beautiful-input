@@ -232,8 +232,7 @@ const Settings: React.FC = () => {
   const [downloadingModel, setDownloadingModel] = useState<LocalModelType | null>(null)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [whisperInstalled, setWhisperInstalled] = useState<boolean | null>(null)
-  const [whisperDownloading, setWhisperDownloading] = useState(false)
-  const [whisperDownloadProgress, setWhisperDownloadProgress] = useState(0)
+  const [whisperInstalling, setWhisperInstalling] = useState(false)
 
   // 自动保存定时器引用
   const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null)
@@ -262,22 +261,6 @@ const Settings: React.FC = () => {
         showMessage('error', data.error || '下载失败')
       }
     })
-
-    // 监听 Whisper 下载进度
-    window.electronAPI.onWhisperDownloadProgress((_, data) => {
-      if (data.status === 'downloading') {
-        setWhisperDownloadProgress(data.progress || 0)
-      } else if (data.status === 'completed') {
-        setWhisperDownloading(false)
-        setWhisperDownloadProgress(0)
-        setWhisperInstalled(true)
-        showMessage('success', 'Whisper 安装完成')
-      } else if (data.status === 'error') {
-        setWhisperDownloading(false)
-        setWhisperDownloadProgress(0)
-        showMessage('error', 'Whisper 安装失败')
-      }
-    })
   }, [])
 
   // 检查 Whisper 状态
@@ -291,23 +274,22 @@ const Settings: React.FC = () => {
     }
   }
 
-  // 下载 Whisper
-  const handleDownloadWhisper = async () => {
-    setWhisperDownloading(true)
-    setWhisperDownloadProgress(0)
+  // 安装 Whisper（从本地资源）
+  const handleInstallWhisper = async () => {
+    setWhisperInstalling(true)
     try {
-      await window.electronAPI.downloadWhisper()
+      const success = await window.electronAPI.installWhisper()
+      if (success) {
+        setWhisperInstalled(true)
+        showMessage('success', 'Whisper 安装成功')
+      } else {
+        showMessage('error', 'Whisper 安装失败，请检查资源文件是否存在')
+      }
     } catch (error) {
-      showMessage('error', `下载失败: ${(error as Error).message}`)
-      setWhisperDownloading(false)
+      showMessage('error', `安装失败: ${(error as Error).message}`)
+    } finally {
+      setWhisperInstalling(false)
     }
-  }
-
-  // 取消 Whisper 下载
-  const handleCancelWhisperDownload = () => {
-    window.electronAPI.cancelWhisperDownload()
-    setWhisperDownloading(false)
-    setWhisperDownloadProgress(0)
   }
 
   const loadSettings = async () => {
@@ -337,13 +319,8 @@ const Settings: React.FC = () => {
       const info = await window.electronAPI.getHardwareInfo()
       if (info) {
         setHardwareInfo(info)
-        // 如果当前没有选择模型或是默认的 base，自动设置为推荐模型
-        if (!settings.localModel?.selectedModel || settings.localModel.selectedModel === 'base') {
-          updateSetting('localModel', {
-            ...settings.localModel,
-            selectedModel: info.recommendedModel
-          })
-        }
+        // 不再自动覆盖用户选择的模型
+        // 硬件信息仅用于显示推荐，用户可以自行选择
       }
     } catch (error) {
       console.error('加载硬件信息失败:', error)
@@ -891,30 +868,18 @@ const Settings: React.FC = () => {
                           Whisper 已安装，可以使用本地语音识别
                         </p>
                       ) : (
-                        <p className="status-not-installed">
-                          <span className="status-icon">!</span>
-                          Whisper 未安装，需要先下载
-                        </p>
-                      )}
-                      {!whisperInstalled && !whisperDownloading && (
-                        <button className="btn btn-primary" onClick={handleDownloadWhisper}>
-                          下载 Whisper 程序
-                        </button>
-                      )}
-                      {whisperDownloading && (
-                        <div className="download-progress">
-                          <div className="progress-bar">
-                            <div
-                              className="progress-fill"
-                              style={{ width: `${whisperDownloadProgress}%` }}
-                            />
-                          </div>
-                          <span>{whisperDownloadProgress}%</span>
+                        <div>
+                          <p className="status-not-installed">
+                            <span className="status-icon">!</span>
+                            Whisper 未安装
+                          </p>
                           <button
-                            className="btn btn-small btn-danger"
-                            onClick={handleCancelWhisperDownload}
+                            className="btn btn-primary"
+                            onClick={handleInstallWhisper}
+                            disabled={whisperInstalling}
+                            style={{ marginTop: '8px' }}
                           >
-                            取消
+                            {whisperInstalling ? '正在安装...' : '安装 Whisper'}
                           </button>
                         </div>
                       )}
@@ -1031,24 +996,6 @@ const Settings: React.FC = () => {
                       <option value="ja">日语</option>
                       <option value="ko">韩语</option>
                     </select>
-                  </div>
-
-                  {/* 启用本地模型 */}
-                  <div className="form-group checkbox">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={settings.localModel?.enabled ?? false}
-                        onChange={e => updateSetting('localModel', {
-                          ...settings.localModel,
-                          enabled: e.target.checked
-                        })}
-                      />
-                      启用本地模型
-                    </label>
-                    <span className="help-text">
-                      勾选后将使用本地模型进行语音识别（需先下载模型）
-                    </span>
                   </div>
                 </div>
               )}

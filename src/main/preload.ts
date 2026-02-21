@@ -51,6 +51,15 @@ interface BeautifulInputAPI {
   moveFloatWindow: (position: FloatPosition) => Promise<void>
   getFloatPosition: () => Promise<FloatPosition | null>
 
+  // 悬浮球拖动
+  floatDragStart: (mousePos: FloatPosition) => Promise<void>
+  floatDragMove: (mousePos: FloatPosition) => Promise<void>
+  floatDragEnd: () => Promise<void>
+
+  // 悬停状态
+  onHoverStateChanged: (callback: (isHovering: boolean) => void) => void
+  removeHoverListener: () => void
+
   // AI 功能
   translate: (params: { text: string; targetLanguage: string }) => Promise<{
     success: boolean
@@ -74,9 +83,7 @@ interface BeautifulInputAPI {
 
   // Whisper 可执行文件相关
   checkWhisper: () => Promise<boolean>
-  downloadWhisper: () => Promise<boolean>
-  cancelWhisperDownload: () => Promise<boolean>
-  onWhisperDownloadProgress: (callback: (event: unknown, data: { progress: number; status?: string }) => void) => void
+  installWhisper: () => Promise<boolean>
 
   // 移除监听器
   removeAllListeners: (channel: string) => void
@@ -161,11 +168,7 @@ const api: BeautifulInputAPI = {
 
   // Whisper 可执行文件相关
   checkWhisper: () => ipcRenderer.invoke(IpcChannels.CHECK_WHISPER),
-  downloadWhisper: () => ipcRenderer.invoke(IpcChannels.DOWNLOAD_WHISPER),
-  cancelWhisperDownload: () => ipcRenderer.invoke(IpcChannels.CANCEL_WHISPER_DOWNLOAD),
-  onWhisperDownloadProgress: (callback) => {
-    ipcRenderer.on(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, callback)
-  },
+  installWhisper: () => ipcRenderer.invoke(IpcChannels.INSTALL_WHISPER),
 
   // 移除监听器
   removeAllListeners: (channel) => {

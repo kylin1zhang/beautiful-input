@@ -285,7 +285,7 @@ export class AiProcessorModule extends EventEmitter {
     text: string,
     mode: AiProcessingMode,
     toneStyle: UserSettings['toneStyle'],
-    assistantAction?: string,
+    _assistantAction?: string,  // 保留参数兼容性，但不再使用
     personalDictionary: string[] = []
   ): string {
     let promptTemplate: string
@@ -295,26 +295,8 @@ export class AiProcessorModule extends EventEmitter {
       case 'clean':
         promptTemplate = AI_PROMPTS.CLEAN
         break
-      case 'format':
-        promptTemplate = AI_PROMPTS.FORMAT
-        break
       case 'translate':
         promptTemplate = AI_PROMPTS.TRANSLATE
-        break
-      case 'assistant':
-        switch (assistantAction) {
-          case 'summarize':
-            promptTemplate = AI_PROMPTS.ASSISTANT_SUMMARIZE
-            break
-          case 'explain':
-            promptTemplate = AI_PROMPTS.ASSISTANT_EXPLAIN
-            break
-          case 'expand':
-            promptTemplate = AI_PROMPTS.ASSISTANT_EXPAND
-            break
-          default:
-            promptTemplate = AI_PROMPTS.CLEAN
-        }
         break
       default:
         promptTemplate = AI_PROMPTS.CLEAN
