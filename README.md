@@ -5,7 +5,8 @@ AI 语音输入工具 - 将口语化语言整理成条理清晰的文字
 ## 功能特性
 
 - 🎙️ **语音录制** - 点击悬浮球或使用快捷键开始/停止录音
-- 🤖 **智能识别** - 使用 Groq Whisper API 进行语音识别
+- 🤖 **智能识别** - 使用 Groq/OpenAI Whisper API 进行语音识别
+- 💻 **本地模型** - 支持本地运行 Whisper.cpp，完全离线使用
 - ✨ **AI 处理** - 使用 Qwen/DeepSeek API 去除口语化、格式化文本
 - ⌨️ **自动输入** - 将处理后的文本自动插入光标位置
 - 🌐 **中英混说** - 准确识别中英文混合语音
@@ -33,10 +34,43 @@ AI 语音输入工具 - 将口语化语言整理成条理清晰的文字
 
 - **框架**: Electron + TypeScript + React
 - **状态管理**: Zustand
-- **语音识别**: Groq Whisper API
+- **语音识别**: Groq/OpenAI Whisper API / 本地 Whisper.cpp
 - **AI 处理**: Qwen/DeepSeek API
 - **输入模拟**: nut-js
 - **本地存储**: electron-store
+
+## 本地语音识别
+
+BeautifulInput 支持本地运行 Whisper 模型进行语音识别，无需联网即可使用。
+
+### 特点
+
+- 完全离线运行，无需 API Key
+- 支持多种模型（base/small/medium/large-v3）
+- 自动检测硬件并推荐合适的模型
+- 支持 NVIDIA GPU 和 Apple Silicon 加速
+- 支持国内镜像下载
+
+### 使用方法
+
+1. 打开设置，选择「语音服务提供商」为「本地模型」
+2. 点击「检测硬件」获取推荐模型
+3. 下载推荐的模型文件
+4. 勾选「启用本地模型」
+5. 开始使用！
+
+### 模型说明
+
+| 模型 | 大小 | 准确率 | 推荐配置 |
+|-----|-----|-------|---------|
+| base | 142MB | 一般 | CPU + 8GB 内存 |
+| small | 466MB | 较好 | CPU + 16GB 内存 |
+| medium | 1.5GB | 好 | GPU 4GB+ 或 Apple Silicon |
+| large-v3 | 2.9GB | 最好 | NVIDIA GPU 8GB+ |
+
+### 准备 Whisper.cpp
+
+本地语音识别需要 Whisper.cpp 可执行文件。从 [Whisper.cpp Releases](https://github.com/ggerganov/whisper.cpp/releases) 下载对应平台的文件，放入 `resources/whisper/` 目录。详见 `resources/whisper/README.md`。
 
 ## 快速开始
 
@@ -80,7 +114,10 @@ beautiful-input/
 │   │   ├── preload.ts     # 预加载脚本
 │   │   ├── modules/       # 功能模块
 │   │   │   ├── recording/     # 录音模块
-│   │   │   ├── transcription/ # 语音识别模块
+│   │   │   ├── transcription/ # 语音识别模块（API）
+│   │   │   ├── hardware-detector/ # 硬件检测模块
+│   │   │   ├── model-manager/ # 本地模型管理模块
+│   │   │   ├── local-transcriber/ # 本地语音识别模块
 │   │   │   ├── ai-processor/  # AI 处理模块
 │   │   │   ├── input-simulator/ # 输入模拟模块
 │   │   │   ├── settings/      # 设置模块
@@ -106,7 +143,8 @@ beautiful-input/
 │       └── utils/         # 工具函数
 ├── resources/             # 资源文件（图标等）
 │   ├── icon.svg
-│   └── icon-*.png
+│   ├── icon-*.png
+│   └── whisper/           # Whisper.cpp 可执行文件
 ├── scripts/               # 构建脚本
 │   └── generate-icon.js   # 图标生成脚本
 └── build/                 # 构建输出
@@ -156,10 +194,13 @@ beautiful-input/
 - [x] 自定义悬浮球图标
 - [x] 悬浮球边界限制
 
-### 第三阶段：高级功能
-- [ ] AI 助手功能
-- [ ] 个人词典
-- [ ] 个性化语调
+### 第三阶段：高级功能 ✅
+- [x] 本地语音识别（Whisper.cpp）
+- [x] 硬件检测与模型推荐
+- [x] 模型下载管理
+- [x] AI 助手功能
+- [x] 个人词典
+- [x] 个性化语调
 - [ ] 悬停菜单
 - [ ] 性能优化
 
