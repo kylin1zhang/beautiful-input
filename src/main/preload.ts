@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcChannels, UserSettings, HistoryItem, FloatPosition } from '@shared/types'
+import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState } from '@shared/types'
 
 // API 类型定义
 interface BeautifulInputAPI {
@@ -61,6 +61,16 @@ interface BeautifulInputAPI {
   // 系统
   getAppVersion: () => Promise<string>
   quitApp: () => Promise<void>
+
+  // 本地模型相关
+  detectHardware: () => Promise<HardwareInfo>
+  getHardwareInfo: () => Promise<HardwareInfo | undefined>
+  getLocalModels: () => Promise<LocalModelInfo[]>
+  downloadModel: (modelType: LocalModelType) => Promise<boolean>
+  cancelDownload: (modelType: LocalModelType) => Promise<boolean>
+  deleteModel: (modelType: LocalModelType) => Promise<boolean>
+  testLocalTranscription: () => Promise<{ success: boolean; message: string }>
+  onModelDownloadProgress: (callback: (event: unknown, data: ModelDownloadState) => void) => void
 
   // 移除监听器
   removeAllListeners: (channel: string) => void
@@ -130,6 +140,18 @@ const api: BeautifulInputAPI = {
   // 系统
   getAppVersion: () => ipcRenderer.invoke(IpcChannels.GET_APP_VERSION),
   quitApp: () => ipcRenderer.invoke(IpcChannels.QUIT_APP),
+
+  // 本地模型相关
+  detectHardware: () => ipcRenderer.invoke(IpcChannels.DETECT_HARDWARE),
+  getHardwareInfo: () => ipcRenderer.invoke(IpcChannels.GET_HARDWARE_INFO),
+  getLocalModels: () => ipcRenderer.invoke(IpcChannels.GET_LOCAL_MODELS),
+  downloadModel: (modelType) => ipcRenderer.invoke(IpcChannels.DOWNLOAD_MODEL, modelType),
+  cancelDownload: (modelType) => ipcRenderer.invoke(IpcChannels.CANCEL_DOWNLOAD, modelType),
+  deleteModel: (modelType) => ipcRenderer.invoke(IpcChannels.DELETE_MODEL, modelType),
+  testLocalTranscription: () => ipcRenderer.invoke(IpcChannels.TEST_LOCAL_TRANSCRIPTION),
+  onModelDownloadProgress: (callback) => {
+    ipcRenderer.on(IpcChannels.MODEL_DOWNLOAD_PROGRESS, callback)
+  },
 
   // 移除监听器
   removeAllListeners: (channel) => {
