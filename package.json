@@ -59,6 +59,15 @@
       "dist/**/*",
       "resources/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources/whisper",
+        "to": "whisper",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
