@@ -25,7 +25,7 @@ export interface UserSettings {
   openaiApiKey: string  // OpenAI API Key (用于 Whisper 等服务)
   deepseekApiKey: string
   qwenApiKey: string
-  asrProvider: 'groq' | 'openai'  // 语音识别服务提供商选择
+  asrProvider: 'groq' | 'openai' | 'local'  // 语音识别服务提供商选择
   aiProvider: 'deepseek' | 'qwen'  // AI 服务提供商选择
 
   // 快捷键设置
@@ -54,6 +54,12 @@ export interface UserSettings {
     vadSilenceDuration: number // 毫秒（内部存储），界面显示为秒
     vadSilenceThreshold?: number // 静音检测阈值（0.010-0.030），数值越小越灵敏，建议范围：0.010-0.025
   }
+
+  // 本地模型配置
+  localModel: LocalModelSettings
+
+  // 硬件检测结果缓存
+  hardwareInfo?: HardwareInfo
 }
 
 // 默认设置
@@ -80,7 +86,15 @@ export const defaultSettings: UserSettings = {
     enabled: true,
     vadSilenceDuration: 3500,  // 默认 3.5 秒
     vadSilenceThreshold: 0.008  // 默认值，建议范围：0.006-0.025
-  }
+  },
+  localModel: {
+    enabled: false,
+    selectedModel: 'base',
+    language: 'auto',
+    threads: 4,
+    useGpu: true
+  },
+  hardwareInfo: undefined
 }
 
 // 历史记录项
@@ -203,7 +217,17 @@ export enum IpcChannels {
   // 系统
   GET_APP_VERSION = 'get-app-version',
   CHECK_FOR_UPDATES = 'check-for-updates',
-  QUIT_APP = 'quit-app'
+  QUIT_APP = 'quit-app',
+
+  // 本地模型相关
+  DETECT_HARDWARE = 'detect-hardware',
+  GET_HARDWARE_INFO = 'get-hardware-info',
+  GET_LOCAL_MODELS = 'get-local-models',
+  DOWNLOAD_MODEL = 'download-model',
+  DELETE_MODEL = 'delete-model',
+  CANCEL_DOWNLOAD = 'cancel-download',
+  TEST_LOCAL_TRANSCRIPTION = 'test-local-transcription',
+  MODEL_DOWNLOAD_PROGRESS = 'model-download-progress'
 }
 
 // 支持的语言列表
@@ -227,3 +251,49 @@ export const TONE_STYLES = [
   { value: 'professional', label: '专业', description: '适合工作场合和商务沟通' },
   { value: 'creative', label: '创意', description: '适合创意写作和表达个性' }
 ]
+
+// 本地语音识别模型类型
+export type LocalModelType = 'base' | 'small' | 'medium' | 'large-v3'
+
+// 本地模型信息
+export interface LocalModelInfo {
+  type: LocalModelType
+  name: string
+  size: number  // 字节
+  sizeDisplay: string  // 显示用，如 "142MB"
+  downloaded: boolean
+  downloading: boolean
+  downloadProgress?: number  // 0-100
+  sha256: string  // 用于校验
+  url: string  // 下载地址
+}
+
+// 硬件检测结果
+export interface HardwareInfo {
+  platform: 'win32' | 'darwin' | 'linux'
+  hasNvidia: boolean
+  nvidiaGpuName?: string
+  vram?: number  // MB
+  isAppleSilicon: boolean
+  totalMemory: number  // GB
+  recommendedModel: LocalModelType
+  recommendedReason: string
+}
+
+// 本地模型配置
+export interface LocalModelSettings {
+  enabled: boolean  // 是否启用本地模型
+  selectedModel: LocalModelType
+  language: string  // 'auto' | 'zh' | 'en' | ...
+  threads: number  // CPU 线程数
+  useGpu: boolean  // 是否使用 GPU
+}
+
+// 模型下载状态
+export interface ModelDownloadState {
+  modelType: LocalModelType
+  status: 'idle' | 'downloading' | 'completed' | 'error'
+  progress: number  // 0-100
+  speed?: string  // 如 "2.5 MB/s"
+  error?: string
+}

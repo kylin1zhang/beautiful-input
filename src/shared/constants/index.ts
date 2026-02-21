@@ -243,3 +243,68 @@ export const APP_INFO = {
   WEBSITE: 'https://beautifulinput.app',
   GITHUB: 'https://github.com/beautifulinput/beautifulinput'
 } as const
+
+// 本地 Whisper 模型配置
+export const LOCAL_WHISPER_MODELS: Record<string, {
+  name: string
+  size: number
+  sha256: string
+  url: string
+}> = {
+  'base': {
+    name: 'Base',
+    size: 142 * 1024 * 1024,  // 142MB
+    sha256: '',  // TODO: 填入实际 SHA256
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin'
+  },
+  'small': {
+    name: 'Small',
+    size: 466 * 1024 * 1024,  // 466MB
+    sha256: '',
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin'
+  },
+  'medium': {
+    name: 'Medium',
+    size: 1500 * 1024 * 1024,  // 1.5GB
+    sha256: '',
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin'
+  },
+  'large-v3': {
+    name: 'Large V3',
+    size: 2900 * 1024 * 1024,  // 2.9GB
+    sha256: '',
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin'
+  }
+}
+
+// 国内镜像下载地址
+export const LOCAL_WHISPER_MIRROR_URLS: Record<string, string[]> = {
+  'base': [
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin'
+  ],
+  'small': [
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small.bin'
+  ],
+  'medium': [
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin'
+  ],
+  'large-v3': [
+    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin'
+  ]
+}
+
+// Whisper.cpp 可执行文件配置
+export const WHISPER_EXECUTABLES = {
+  win32: {
+    cuda: 'whisper-cuda.exe',
+    cpu: 'whisper.exe'
+  },
+  darwin: {
+    metal: 'whisper-metal',
+    cpu: 'whisper'
+  },
+  linux: {
+    cuda: 'whisper-cuda',
+    cpu: 'whisper'
+  }
+}

@@ -6,7 +6,7 @@ import { API_CONFIG } from '@shared/constants/index.js'
 import { bufferToWav, retry } from '@shared/utils/index.js'
 
 // ASR 提供商类型
-type AsrProvider = 'groq' | 'openai'
+type AsrProvider = 'groq' | 'openai' | 'local'
 
 export class TranscriptionModule extends EventEmitter {
   private abortController: AbortController | null = null
