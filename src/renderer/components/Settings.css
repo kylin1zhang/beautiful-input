@@ -620,3 +620,133 @@ body {
 .recording-hint {
   color: #3B82F6;
 }
+
+/* 本地模型配置样式 */
+.local-model-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.local-model-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.hardware-info {
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.hardware-info p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+.recommend-reason {
+  color: #6b7280;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.model-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.model-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.model-radio input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3B82F6;
+}
+
+.model-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #374151;
+}
+
+.model-size {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.model-status.downloaded {
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.model-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-small {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.btn-danger {
+  background: #EF4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #DC2626;
+}
+
+.download-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar {
+  width: 100px;
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.2s;
+}
+
+.download-progress span {
+  font-size: 12px;
+  color: #6b7280;
+  min-width: 36px;
+}

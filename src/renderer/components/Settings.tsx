@@ -16,7 +16,7 @@ import {
   CircleX,
   Clock
 } from 'lucide-react'
-import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES } from '@shared/types/index.js'
+import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType } from '@shared/types/index.js'
 import './Settings.css'
 
 // 快捷键录制组件
@@ -227,6 +227,10 @@ const Settings: React.FC = () => {
   const [showQwenKey, setShowQwenKey] = useState(false)
   const [activeTab, setActiveTab] = useState<'api' | 'shortcuts' | 'personalization' | 'other'>('api')
   const [newDictionaryItem, setNewDictionaryItem] = useState('')
+  const [localModels, setLocalModels] = useState<LocalModelInfo[]>([])
+  const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null)
+  const [downloadingModel, setDownloadingModel] = useState<LocalModelType | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   // 自动保存定时器引用
   const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null)
@@ -237,6 +241,23 @@ const Settings: React.FC = () => {
   // 加载设置
   useEffect(() => {
     loadSettings()
+    loadLocalModels()
+    loadHardwareInfo()
+
+    // 监听下载进度
+    window.electronAPI.onModelDownloadProgress((_, data) => {
+      if (data.status === 'downloading') {
+        setDownloadProgress(data.progress || 0)
+      } else if (data.status === 'completed') {
+        setDownloadingModel(null)
+        setDownloadProgress(0)
+        loadLocalModels()
+      } else if (data.status === 'error') {
+        setDownloadingModel(null)
+        setDownloadProgress(0)
+        showMessage('error', data.error || '下载失败')
+      }
+    })
   }, [])
 
   const loadSettings = async () => {
@@ -247,6 +268,75 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('加载设置失败:', error)
       showMessage('error', '加载设置失败')
+    }
+  }
+
+  // 加载本地模型信息
+  const loadLocalModels = async () => {
+    try {
+      const models = await window.electronAPI.getLocalModels()
+      setLocalModels(models)
+    } catch (error) {
+      console.error('加载模型信息失败:', error)
+    }
+  }
+
+  // 加载硬件信息
+  const loadHardwareInfo = async () => {
+    try {
+      const info = await window.electronAPI.getHardwareInfo()
+      if (info) {
+        setHardwareInfo(info)
+      }
+    } catch (error) {
+      console.error('加载硬件信息失败:', error)
+    }
+  }
+
+  // 检测硬件
+  const detectHardware = async () => {
+    showMessage('success', '正在检测硬件...')
+    try {
+      const info = await window.electronAPI.detectHardware()
+      setHardwareInfo(info)
+      showMessage('success', '硬件检测完成')
+    } catch (error) {
+      showMessage('error', '硬件检测失败')
+    }
+  }
+
+  // 下载模型
+  const handleDownloadModel = async (modelType: LocalModelType) => {
+    setDownloadingModel(modelType)
+    setDownloadProgress(0)
+
+    try {
+      await window.electronAPI.downloadModel(modelType)
+      // 下载完成后刷新模型列表（通过进度回调处理）
+    } catch (error) {
+      showMessage('error', `下载失败: ${(error as Error).message}`)
+      setDownloadingModel(null)
+      setDownloadProgress(0)
+    }
+  }
+
+  // 取消下载
+  const handleCancelDownload = (modelType: LocalModelType) => {
+    window.electronAPI.cancelDownload(modelType)
+    setDownloadingModel(null)
+    setDownloadProgress(0)
+  }
+
+  // 删除模型
+  const handleDeleteModel = async (modelType: LocalModelType) => {
+    if (!window.confirm('确定要删除此模型吗？')) return
+
+    try {
+      await window.electronAPI.deleteModel(modelType)
+      await loadLocalModels()
+      showMessage('success', '模型已删除')
+    } catch (error) {
+      showMessage('error', '删除失败')
     }
   }
 
@@ -641,10 +731,11 @@ const Settings: React.FC = () => {
                 </label>
                 <select
                   value={settings.asrProvider}
-                  onChange={e => updateSetting('asrProvider', e.target.value as 'groq' | 'openai')}
+                  onChange={e => updateSetting('asrProvider', e.target.value as 'groq' | 'openai' | 'local')}
                 >
                   <option value="groq">Groq (Whisper Large V3)</option>
                   <option value="openai">OpenAI (Whisper)</option>
+                  <option value="local">本地模型 (离线)</option>
                 </select>
                 <span className="help-text">
                   选择用于语音识别的服务提供商
@@ -718,6 +809,143 @@ const Settings: React.FC = () => {
                   <span className="help-text">
                     使用 OpenAI Whisper 模型进行语音识别，<a href="https://platform.openai.com" target="_blank" rel="noreferrer">获取 API Key</a>
                   </span>
+                </div>
+              )}
+
+              {/* 本地模型配置 */}
+              {settings.asrProvider === 'local' && (
+                <div className="local-model-section">
+                  <h4>本地模型设置</h4>
+
+                  {/* 硬件检测 */}
+                  <div className="form-group">
+                    <label>硬件检测</label>
+                    <div className="hardware-info">
+                      {hardwareInfo ? (
+                        <>
+                          <p>
+                            <strong>检测结果：</strong>
+                            {hardwareInfo.hasNvidia && hardwareInfo.nvidiaGpuName
+                              ? `${hardwareInfo.nvidiaGpuName} (${hardwareInfo.vram}MB)`
+                              : hardwareInfo.isAppleSilicon
+                                ? 'Apple Silicon'
+                                : '仅 CPU'}
+                          </p>
+                          <p>
+                            <strong>推荐模型：</strong>
+                            {hardwareInfo.recommendedModel}
+                            <span className="recommend-reason">({hardwareInfo.recommendedReason})</span>
+                          </p>
+                        </>
+                      ) : (
+                        <p>尚未检测硬件</p>
+                      )}
+                      <button className="btn btn-secondary" onClick={detectHardware}>
+                        重新检测
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 模型列表 */}
+                  <div className="form-group">
+                    <label>模型选择</label>
+                    <div className="model-list">
+                      {localModels.map(model => (
+                        <div key={model.type} className="model-item">
+                          <label className="model-radio">
+                            <input
+                              type="radio"
+                              name="localModel"
+                              value={model.type}
+                              checked={settings.localModel?.selectedModel === model.type}
+                              onChange={() => updateSetting('localModel', {
+                                ...settings.localModel,
+                                selectedModel: model.type
+                              })}
+                              disabled={!model.downloaded}
+                            />
+                            <span className="model-name">{model.name}</span>
+                            <span className="model-size">{model.sizeDisplay}</span>
+                            {model.downloaded && <span className="model-status downloaded">✓ 已下载</span>}
+                          </label>
+                          <div className="model-actions">
+                            {!model.downloaded && (
+                              <>
+                                {downloadingModel === model.type ? (
+                                  <div className="download-progress">
+                                    <div className="progress-bar">
+                                      <div
+                                        className="progress-fill"
+                                        style={{ width: `${downloadProgress}%` }}
+                                      />
+                                    </div>
+                                    <span>{downloadProgress}%</span>
+                                    <button
+                                      className="btn btn-small btn-danger"
+                                      onClick={() => handleCancelDownload(model.type)}
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    className="btn btn-small"
+                                    onClick={() => handleDownloadModel(model.type)}
+                                  >
+                                    下载
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {model.downloaded && (
+                              <button
+                                className="btn btn-small btn-danger"
+                                onClick={() => handleDeleteModel(model.type)}
+                              >
+                                删除
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 语言设置 */}
+                  <div className="form-group">
+                    <label>语言</label>
+                    <select
+                      value={settings.localModel?.language || 'auto'}
+                      onChange={e => updateSetting('localModel', {
+                        ...settings.localModel,
+                        language: e.target.value
+                      })}
+                    >
+                      <option value="auto">自动检测</option>
+                      <option value="zh">中文</option>
+                      <option value="en">英语</option>
+                      <option value="ja">日语</option>
+                      <option value="ko">韩语</option>
+                    </select>
+                  </div>
+
+                  {/* 启用本地模型 */}
+                  <div className="form-group checkbox">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={settings.localModel?.enabled ?? false}
+                        onChange={e => updateSetting('localModel', {
+                          ...settings.localModel,
+                          enabled: e.target.checked
+                        })}
+                      />
+                      启用本地模型
+                    </label>
+                    <span className="help-text">
+                      勾选后将使用本地模型进行语音识别（需先下载模型）
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
