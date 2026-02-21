@@ -11,12 +11,15 @@ import { InputSimulatorModule } from './modules/input-simulator/index.js'
 import { SettingsModule } from './modules/settings/index.js'
 import { ShortcutsModule } from './modules/shortcuts/index.js'
 import { HistoryModule } from './modules/history/index.js'
+import { HardwareDetector } from './modules/hardware-detector/index.js'
+import { ModelManager } from './modules/model-manager/index.js'
+import { LocalTranscriber } from './modules/local-transcriber/index.js'
 
 // 服务导入
 import { StoreService } from './services/store.service.js'
 
 // 类型和常量
-import { IpcChannels, UserSettings } from '@shared/types/index.js'
+import { IpcChannels, UserSettings, LocalModelType } from '@shared/types/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -36,6 +39,9 @@ let settingsModule: SettingsModule
 let shortcutsModule: ShortcutsModule
 let historyModule: HistoryModule
 let storeService: StoreService
+let hardwareDetector: HardwareDetector
+let modelManager: ModelManager
+let localTranscriber: LocalTranscriber
 
 // 应用状态
 let isRecording = false
@@ -551,15 +557,38 @@ async function stopRecording(): Promise<void> {
       aiProvider: settings.aiProvider
     }))
 
-    // 根据选择的 ASR 提供商获取对应的 API Key
-    const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
+    let transcriptionResult
 
-    const transcriptionResult = await transcriptionModule.transcribe(
-      audioBuffer,
-      asrApiKey,
-      settings.asrProvider,
-      settings.personalDictionary
-    )
+    // 根据选择的 ASR 提供商进行语音识别
+    if (settings.asrProvider === 'local' && settings.localModel?.enabled) {
+      // 使用本地模型
+      console.log('[Main] 使用本地模型进行语音识别')
+
+      // 确保有硬件信息
+      if (!settings.hardwareInfo) {
+        settings.hardwareInfo = await hardwareDetector.detect()
+        settingsModule.setSettings({ hardwareInfo: settings.hardwareInfo })
+      }
+
+      transcriptionResult = await localTranscriber.transcribe(
+        audioBuffer,
+        settings.localModel.selectedModel,
+        settings.hardwareInfo,
+        settings.localModel.language,
+        settings.localModel.threads
+      )
+    } else {
+      // 使用 API
+      const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
+      const apiProvider = settings.asrProvider === 'local' ? 'groq' : settings.asrProvider
+
+      transcriptionResult = await transcriptionModule.transcribe(
+        audioBuffer,
+        asrApiKey,
+        apiProvider,
+        settings.personalDictionary
+      )
+    }
 
     if (!transcriptionResult.success || !transcriptionResult.text) {
       throw new Error(transcriptionResult.error || '语音识别失败')
@@ -839,16 +868,38 @@ async function stopTranslateRecording(): Promise<void> {
 
     const settings = settingsModule.getSettings()
 
-    // 根据选择的 ASR 提供商获取对应的 API Key
-    const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
+    let transcriptionResult
 
-    // 语音识别
-    const transcriptionResult = await transcriptionModule.transcribe(
-      audioBuffer,
-      asrApiKey,
-      settings.asrProvider,
-      settings.personalDictionary
-    )
+    // 根据选择的 ASR 提供商进行语音识别
+    if (settings.asrProvider === 'local' && settings.localModel?.enabled) {
+      // 使用本地模型
+      console.log('[Main] 使用本地模型进行语音识别')
+
+      // 确保有硬件信息
+      if (!settings.hardwareInfo) {
+        settings.hardwareInfo = await hardwareDetector.detect()
+        settingsModule.setSettings({ hardwareInfo: settings.hardwareInfo })
+      }
+
+      transcriptionResult = await localTranscriber.transcribe(
+        audioBuffer,
+        settings.localModel.selectedModel,
+        settings.hardwareInfo,
+        settings.localModel.language,
+        settings.localModel.threads
+      )
+    } else {
+      // 使用 API
+      const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
+      const apiProvider = settings.asrProvider === 'local' ? 'groq' : settings.asrProvider
+
+      transcriptionResult = await transcriptionModule.transcribe(
+        audioBuffer,
+        asrApiKey,
+        apiProvider,
+        settings.personalDictionary
+      )
+    }
 
     if (!transcriptionResult.success || !transcriptionResult.text) {
       throw new Error(transcriptionResult.error || '语音识别失败')
@@ -1047,6 +1098,40 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.QUIT_APP, () => {
     app.quit()
   })
+
+  // 本地模型相关
+  ipcMain.handle(IpcChannels.DETECT_HARDWARE, async () => {
+    const info = await hardwareDetector.detect()
+    // 缓存到设置中
+    settingsModule.setSettings({ hardwareInfo: info })
+    return info
+  })
+
+  ipcMain.handle(IpcChannels.GET_HARDWARE_INFO, () => {
+    return settingsModule.getSettings().hardwareInfo
+  })
+
+  ipcMain.handle(IpcChannels.GET_LOCAL_MODELS, async () => {
+    return modelManager.getModels()
+  })
+
+  ipcMain.handle(IpcChannels.DOWNLOAD_MODEL, async (_, modelType: LocalModelType) => {
+    return modelManager.downloadModel(modelType)
+  })
+
+  ipcMain.handle(IpcChannels.CANCEL_DOWNLOAD, (_, modelType: LocalModelType) => {
+    modelManager.cancelDownload(modelType)
+    return true
+  })
+
+  ipcMain.handle(IpcChannels.DELETE_MODEL, async (_, modelType: LocalModelType) => {
+    return modelManager.deleteModel(modelType)
+  })
+
+  ipcMain.handle(IpcChannels.TEST_LOCAL_TRANSCRIPTION, async () => {
+    // TODO: 使用测试音频进行转录测试
+    return { success: true, message: '测试成功' }
+  })
 }
 
 /**
@@ -1065,6 +1150,29 @@ app.whenReady().then(async () => {
   aiProcessorModule = new AiProcessorModule()
   inputSimulatorModule = new InputSimulatorModule()
   shortcutsModule = new ShortcutsModule()
+  hardwareDetector = new HardwareDetector()
+  modelManager = new ModelManager()
+  localTranscriber = new LocalTranscriber()
+
+  // 监听模型下载进度，转发到渲染进程
+  modelManager.on('download-progress', (data) => {
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+      ...data,
+      status: 'downloading'
+    })
+  })
+  modelManager.on('download-complete', (data) => {
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+      ...data,
+      status: 'completed'
+    })
+  })
+  modelManager.on('download-error', (data) => {
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+      ...data,
+      status: 'error'
+    })
+  })
 
   // 创建窗口
   floatWindow = createFloatWindow()
