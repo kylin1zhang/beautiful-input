@@ -34,7 +34,12 @@
       "Bash(npm run build:*)",
       "Bash(npm run build:win:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(npx skills find:*)",
+      "Bash(npx skills add:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(start playwright-report/index.html)",
+      "Bash(timeout /t:*)"
     ]
   }
 }

@@ -227,7 +227,13 @@ export enum IpcChannels {
   DELETE_MODEL = 'delete-model',
   CANCEL_DOWNLOAD = 'cancel-download',
   TEST_LOCAL_TRANSCRIPTION = 'test-local-transcription',
-  MODEL_DOWNLOAD_PROGRESS = 'model-download-progress'
+  MODEL_DOWNLOAD_PROGRESS = 'model-download-progress',
+
+  // Whisper 可执行文件相关
+  CHECK_WHISPER = 'check-whisper',
+  DOWNLOAD_WHISPER = 'download-whisper',
+  CANCEL_WHISPER_DOWNLOAD = 'cancel-whisper-download',
+  WHISPER_DOWNLOAD_PROGRESS = 'whisper-download-progress'
 }
 
 // 支持的语言列表

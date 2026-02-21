@@ -72,6 +72,12 @@ interface BeautifulInputAPI {
   testLocalTranscription: () => Promise<{ success: boolean; message: string }>
   onModelDownloadProgress: (callback: (event: unknown, data: ModelDownloadState) => void) => void
 
+  // Whisper 可执行文件相关
+  checkWhisper: () => Promise<boolean>
+  downloadWhisper: () => Promise<boolean>
+  cancelWhisperDownload: () => Promise<boolean>
+  onWhisperDownloadProgress: (callback: (event: unknown, data: { progress: number; status?: string }) => void) => void
+
   // 移除监听器
   removeAllListeners: (channel: string) => void
 }
@@ -151,6 +157,14 @@ const api: BeautifulInputAPI = {
   testLocalTranscription: () => ipcRenderer.invoke(IpcChannels.TEST_LOCAL_TRANSCRIPTION),
   onModelDownloadProgress: (callback) => {
     ipcRenderer.on(IpcChannels.MODEL_DOWNLOAD_PROGRESS, callback)
+  },
+
+  // Whisper 可执行文件相关
+  checkWhisper: () => ipcRenderer.invoke(IpcChannels.CHECK_WHISPER),
+  downloadWhisper: () => ipcRenderer.invoke(IpcChannels.DOWNLOAD_WHISPER),
+  cancelWhisperDownload: () => ipcRenderer.invoke(IpcChannels.CANCEL_WHISPER_DOWNLOAD),
+  onWhisperDownloadProgress: (callback) => {
+    ipcRenderer.on(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, callback)
   },
 
   // 移除监听器

@@ -750,3 +750,48 @@ body {
   color: #6b7280;
   min-width: 36px;
 }
+
+/* Whisper 状态样式 */
+.whisper-status {
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.whisper-status p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-icon {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.status-checking {
+  color: #6b7280;
+}
+
+.status-installed {
+  color: #10b981;
+}
+
+.status-installed .status-icon {
+  color: #10b981;
+}
+
+.status-not-installed {
+  color: #f59e0b;
+}
+
+.status-not-installed .status-icon {
+  color: #f59e0b;
+}
+
+.whisper-status .btn {
+  margin-top: 8px;
+}

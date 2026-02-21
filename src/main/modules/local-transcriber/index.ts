@@ -14,10 +14,12 @@ import { bufferToWav } from '@shared/utils/index.js'
 export class LocalTranscriber extends EventEmitter {
   private whisperProcess: ChildProcess | null = null
   private modelsDir: string
+  private whisperBinDir: string
 
   constructor() {
     super()
     this.modelsDir = join(app.getPath('userData'), 'whisper-models')
+    this.whisperBinDir = join(app.getPath('userData'), 'whisper-bin')
   }
 
   /**
@@ -25,34 +27,11 @@ export class LocalTranscriber extends EventEmitter {
    */
   private getWhisperExecutable(hw: HardwareInfo): string {
     const platform = hw.platform
-    const useGpu = hw.hasNvidia || hw.isAppleSilicon
 
-    let executableName: string
-
-    if (platform === 'win32') {
-      executableName = useGpu && hw.hasNvidia
-        ? WHISPER_EXECUTABLES.win32.cuda
-        : WHISPER_EXECUTABLES.win32.cpu
-    } else if (platform === 'darwin') {
-      executableName = hw.isAppleSilicon
-        ? WHISPER_EXECUTABLES.darwin.metal
-        : WHISPER_EXECUTABLES.darwin.cpu
-    } else {
-      executableName = useGpu && hw.hasNvidia
-        ? WHISPER_EXECUTABLES.linux.cuda
-        : WHISPER_EXECUTABLES.linux.cpu
-    }
-
-    // 开发环境：从 resources 目录读取
-    // 生产环境：从 app.asar.unpacked 或 resources 目录读取
-    const devPath = join(__dirname, '../../../../resources/whisper', executableName)
-    const prodPath = join(process.resourcesPath, 'whisper', executableName)
-
-    if (process.env.NODE_ENV === 'development' && existsSync(devPath)) {
-      return devPath
-    }
-
-    return prodPath
+    // 使用用户数据目录下的 whisper-bin 目录
+    // Windows 使用 main.exe，Linux/macOS 使用 main
+    const executableName = platform === 'win32' ? 'main.exe' : 'main'
+    return join(this.whisperBinDir, executableName)
   }
 
   /**

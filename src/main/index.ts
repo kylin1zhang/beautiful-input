@@ -1132,6 +1132,20 @@ function registerIpcHandlers(): void {
     // TODO: 使用测试音频进行转录测试
     return { success: true, message: '测试成功' }
   })
+
+  // Whisper 可执行文件相关
+  ipcMain.handle(IpcChannels.CHECK_WHISPER, () => {
+    return modelManager.isWhisperInstalled()
+  })
+
+  ipcMain.handle(IpcChannels.DOWNLOAD_WHISPER, async () => {
+    return modelManager.downloadWhisper()
+  })
+
+  ipcMain.handle(IpcChannels.CANCEL_WHISPER_DOWNLOAD, () => {
+    modelManager.cancelWhisperDownload()
+    return true
+  })
 }
 
 /**
@@ -1169,6 +1183,26 @@ app.whenReady().then(async () => {
   })
   modelManager.on('download-error', (data) => {
     floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, {
+      ...data,
+      status: 'error'
+    })
+  })
+
+  // 监听 Whisper 下载进度，转发到渲染进程
+  modelManager.on('whisper-download-progress', (data) => {
+    floatWindow?.webContents.send(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, {
+      ...data,
+      status: data.status || 'downloading'
+    })
+  })
+  modelManager.on('whisper-download-complete', (data) => {
+    floatWindow?.webContents.send(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, {
+      ...data,
+      status: 'completed'
+    })
+  })
+  modelManager.on('whisper-download-error', (data) => {
+    floatWindow?.webContents.send(IpcChannels.WHISPER_DOWNLOAD_PROGRESS, {
       ...data,
       status: 'error'
     })
