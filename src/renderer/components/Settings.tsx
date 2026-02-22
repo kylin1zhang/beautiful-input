@@ -320,14 +320,18 @@ const Settings: React.FC = () => {
     // 监听迁移进度
     window.electronAPI.onModelsMigrateProgress(handleMigrateProgress)
 
-    // 监听 LLM 下载进度
-    window.electronAPI.onLLMDownloadProgress(handleLLMDownloadProgress)
+    // 监听 LLM 下载进度（如果 API 可用）
+    if (window.electronAPI?.onLLMDownloadProgress) {
+      window.electronAPI.onLLMDownloadProgress(handleLLMDownloadProgress)
+    }
 
     // 清理函数：移除监听器
     return () => {
       window.electronAPI.removeAllListeners('model-download-progress')
       window.electronAPI.removeAllListeners('models-migrate-progress')
-      window.electronAPI.removeAllListeners('local-llm-download-progress')
+      if (window.electronAPI?.onLLMDownloadProgress) {
+        window.electronAPI.removeAllListeners('local-llm-download-progress')
+      }
     }
   }, [])
 
@@ -527,12 +531,20 @@ const Settings: React.FC = () => {
 
   // 加载本地 LLM 数据
   const loadLLMData = async () => {
-    await Promise.all([loadLLMModels(), loadLLMStatus()])
+    try {
+      await Promise.all([loadLLMModels(), loadLLMStatus()])
+    } catch (error) {
+      console.error('加载 LLM 数据失败:', error)
+    }
   }
 
   // 加载本地 LLM 模型列表
   const loadLLMModels = async () => {
     try {
+      if (!window.electronAPI?.getLocalLLMModels) {
+        console.warn('getLocalLLMModels API 不可用')
+        return
+      }
       const models = await window.electronAPI.getLocalLLMModels()
       setLLMModels(models)
     } catch (error) {
@@ -543,6 +555,10 @@ const Settings: React.FC = () => {
   // 加载本地 LLM 服务状态
   const loadLLMStatus = async () => {
     try {
+      if (!window.electronAPI?.getLocalLLMStatus) {
+        console.warn('getLocalLLMStatus API 不可用')
+        return
+      }
       const status = await window.electronAPI.getLocalLLMStatus()
       setLLMStatus(status)
     } catch (error) {
@@ -554,6 +570,10 @@ const Settings: React.FC = () => {
   const detectLLMHardware = async () => {
     showMessage('success', '正在检测硬件...')
     try {
+      if (!window.electronAPI?.detectLLMHardware) {
+        showMessage('error', '硬件检测 API 不可用')
+        return
+      }
       const info = await window.electronAPI.detectLLMHardware()
       setLLMHardwareInfo(info)
       showMessage('success', `检测完成: ${info.hasNvidia ? info.nvidiaGpuName : info.isAppleSilicon ? 'Apple Silicon' : 'CPU'}`)
@@ -566,6 +586,11 @@ const Settings: React.FC = () => {
   const handleDownloadLLMModel = async (modelId: string) => {
     if (downloadingLLMModel) {
       showMessage('error', '请等待当前下载完成')
+      return
+    }
+
+    if (!window.electronAPI?.downloadLocalLLMModel) {
+      showMessage('error', '下载 API 不可用')
       return
     }
 
@@ -584,7 +609,9 @@ const Settings: React.FC = () => {
 
   // 取消 LLM 模型下载
   const handleCancelLLMDownload = (modelId: string) => {
-    window.electronAPI.cancelLLMDownload(modelId)
+    if (window.electronAPI?.cancelLLMDownload) {
+      window.electronAPI.cancelLLMDownload(modelId)
+    }
     setDownloadingLLMModel(null)
     setLLMDownloadProgress(null)
   }
@@ -594,6 +621,10 @@ const Settings: React.FC = () => {
     if (!window.confirm('确定要删除此模型吗？')) return
 
     try {
+      if (!window.electronAPI?.deleteLocalLLMModel) {
+        showMessage('error', '删除 API 不可用')
+        return
+      }
       await window.electronAPI.deleteLocalLLMModel(modelId)
       await loadLLMModels()
       showMessage('success', '模型已删除')
@@ -605,6 +636,10 @@ const Settings: React.FC = () => {
   // 启动 LLM 服务
   const handleStartLLM = async (modelId: string) => {
     try {
+      if (!window.electronAPI?.startLocalLLM) {
+        showMessage('error', '启动 API 不可用')
+        return
+      }
       showMessage('success', '正在启动 LLM 服务...')
       const port = await window.electronAPI.startLocalLLM(modelId, {
         backend: llmHardwareInfo?.recommendedBackend || 'cpu'
@@ -619,6 +654,10 @@ const Settings: React.FC = () => {
   // 停止 LLM 服务
   const handleStopLLM = async () => {
     try {
+      if (!window.electronAPI?.stopLocalLLM) {
+        showMessage('error', '停止 API 不可用')
+        return
+      }
       await window.electronAPI.stopLocalLLM()
       await loadLLMStatus()
       showMessage('success', 'LLM 服务已停止')
