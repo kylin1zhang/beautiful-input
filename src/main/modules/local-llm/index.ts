@@ -39,6 +39,14 @@ export class LocalLLMModule extends EventEmitter {
     this.downloader.on('progress', (progress: LLMDownloadProgress) => {
       this.emit('download-progress', progress)
     })
+
+    // 调试：启动时打印路径信息
+    console.log('[LocalLLM] 初始化，调试路径信息:')
+    console.log('[LocalLLM] __dirname:', __dirname)
+    console.log('[LocalLLM] process.resourcesPath:', process.resourcesPath)
+    const testPath = join(__dirname, '../../resources/llama-server.exe')
+    console.log('[LocalLLM] 测试路径:', testPath)
+    console.log('[LocalLLM] 测试路径存在:', existsSync(testPath))
   }
 
   /**
@@ -65,11 +73,15 @@ export class LocalLLMModule extends EventEmitter {
   getModelsDir(): string {
     if (this.customBasePath) {
       // 使用自定义路径，LLM 模型存放在 llm-models 子目录
-      return join(this.customBasePath, 'llm-models')
+      const path = join(this.customBasePath, 'llm-models')
+      console.log(`[LocalLLM] getModelsDir (自定义): ${path}`)
+      return path
     }
     // 默认路径：userData/models/llm
     const userDataPath = app.getPath('userData')
-    return join(userDataPath, 'models', 'llm')
+    const path = join(userDataPath, 'models', 'llm')
+    console.log(`[LocalLLM] getModelsDir (默认): ${path}`)
+    return path
   }
 
   /**
@@ -166,31 +178,39 @@ export class LocalLLMModule extends EventEmitter {
    * 获取资源路径
    */
   private getResourcePath(exeName: string): string {
+    console.log(`[LocalLLM] 查找可执行文件: ${exeName}`)
+    console.log(`[LocalLLM] __dirname: ${__dirname}`)
+
     // 生产环境 - llama 子目录
     const resourcePath = join(process.resourcesPath, 'llama', exeName)
+    console.log(`[LocalLLM] 检查生产路径(子目录): ${resourcePath}, 存在: ${existsSync(resourcePath)}`)
     if (existsSync(resourcePath)) {
       return resourcePath
     }
 
     // 生产环境 - resources 根目录（兼容）
     const resourcePathRoot = join(process.resourcesPath, exeName)
+    console.log(`[LocalLLM] 检查生产路径(根目录): ${resourcePathRoot}, 存在: ${existsSync(resourcePathRoot)}`)
     if (existsSync(resourcePathRoot)) {
       return resourcePathRoot
     }
 
-    // 开发环境 - llama 子目录
-    const devPath = join(__dirname, '../../../../resources/llama', exeName)
+    // 开发环境 - llama 子目录 (从 dist/main/ 出发，需要 ../../ 返回项目根目录)
+    const devPath = join(__dirname, '../../resources/llama', exeName)
+    console.log(`[LocalLLM] 检查开发路径(子目录): ${devPath}, 存在: ${existsSync(devPath)}`)
     if (existsSync(devPath)) {
       return devPath
     }
 
     // 开发环境 - resources 根目录（兼容）
-    const devPathRoot = join(__dirname, '../../../../resources', exeName)
+    const devPathRoot = join(__dirname, '../../resources', exeName)
+    console.log(`[LocalLLM] 检查开发路径(根目录): ${devPathRoot}, 存在: ${existsSync(devPathRoot)}`)
     if (existsSync(devPathRoot)) {
       return devPathRoot
     }
 
     // 假设在 PATH 中
+    console.log(`[LocalLLM] 未找到文件，使用 PATH: ${exeName}`)
     return exeName
   }
 
@@ -206,11 +226,15 @@ export class LocalLLMModule extends EventEmitter {
       backend?: 'cpu' | 'cuda' | 'metal'
     } = {}
   ): Promise<number> {
+    console.log(`[LocalLLM] startServer 被调用，modelId: ${modelId}`)
+    console.log(`[LocalLLM] 当前运行状态: isRunning=${this.isRunning}, currentModel=${this.currentModel}`)
+
     const port = options.port || 8765
     const backend = options.backend || this.hardwareInfo?.recommendedBackend || 'cpu'
 
     // 如果已经是同一个模型在运行，直接返回
     if (this.isRunning && this.currentModel === modelId && this.currentPort === port) {
+      console.log(`[LocalLLM] 服务已在运行，直接返回端口 ${port}`)
       return port
     }
 
@@ -218,6 +242,9 @@ export class LocalLLMModule extends EventEmitter {
     await this.stopServer()
 
     const modelPath = this.getModelPath(modelId)
+    console.log(`[LocalLLM] 模型路径: ${modelPath}`)
+    console.log(`[LocalLLM] 模型文件存在: ${existsSync(modelPath)}`)
+
     if (!existsSync(modelPath)) {
       throw new Error('模型文件不存在，请先下载模型')
     }

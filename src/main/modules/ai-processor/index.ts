@@ -48,6 +48,7 @@ export class AiProcessorModule extends EventEmitter {
 
     // 获取模型
     const model = aiModel || this.getDefaultModel(aiProvider)
+    console.log(`[AiProcessor] aiProvider: ${aiProvider}, aiModel: ${aiModel}, 最终model: ${model}`)
 
     // 构建请求
     const request: AIProcessRequest = {

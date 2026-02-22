@@ -18,9 +18,15 @@ export class LocalLLMProvider extends BaseAIProvider {
   async process(request: AIProcessRequest): Promise<AiProcessingResponse> {
     const abortController = this.createAbortController()
 
+    // 调试：打印收到的请求
+    console.log('[LocalLLMProvider] 收到处理请求')
+    console.log('[LocalLLMProvider] request.model:', request.model)
+
     try {
       // 确保服务已启动
+      console.log('[LocalLLMProvider] 尝试启动服务，模型:', request.model)
       const port = await localLLMModule.startServer(request.model)
+      console.log('[LocalLLMProvider] 服务已启动，端口:', port)
 
       // 通过 OpenAI 兼容接口调用
       const response = await axios.post(

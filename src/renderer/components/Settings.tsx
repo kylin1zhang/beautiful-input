@@ -1371,7 +1371,15 @@ const Settings: React.FC = () => {
                 </label>
                 <select
                   value={settings.aiProvider}
-                  onChange={e => updateSetting('aiProvider', e.target.value)}
+                  onChange={e => {
+                    const newProvider = e.target.value
+                    // 切换提供商时，清空模型选择，让系统使用默认模型
+                    setSettings(prev => ({
+                      ...prev,
+                      aiProvider: newProvider,
+                      aiModel: undefined
+                    }))
+                  }}
                 >
                   <option value="deepseek">DeepSeek</option>
                   <option value="qwen">千问 (通义千问)</option>

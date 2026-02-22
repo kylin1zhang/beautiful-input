@@ -55,7 +55,9 @@
       "Bash(npx electron-builder:*)",
       "Bash(cmd:*)",
       "Bash(\"E:\\\\下载\\\\Kimi_Agent_语音输入工具设计\\\\typeless\\\\release\\\\win-unpacked\\\\BeautifulInput.exe\")",
-      "Bash(unzip:*)"
+      "Bash(unzip:*)",
+      "Bash(\"E:/下载/Kimi_Agent_语音输入工具设计/typeless/resources/llama-server.exe\" --help)",
+      "Bash(./llama-server.exe:*)"
     ]
   }
 }
