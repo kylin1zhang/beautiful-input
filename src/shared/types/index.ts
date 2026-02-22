@@ -158,14 +158,31 @@ export interface FloatPosition {
 }
 
 // 错误类型
-export type ErrorType = 
-  | 'PERMISSION_DENIED' 
-  | 'NETWORK_ERROR' 
-  | 'API_ERROR' 
-  | 'AUDIO_ERROR' 
+export type ErrorType =
+  | 'PERMISSION_DENIED'
+  | 'NETWORK_ERROR'
+  | 'API_ERROR'
+  | 'AUDIO_ERROR'
   | 'INPUT_ERROR'
   | 'AI_ERROR'
   | 'UNKNOWN_ERROR'
+
+// 录音错误类型（细分）
+export enum RecordingErrorType {
+  FFMPEG_NOT_FOUND = 'FFMPEG_NOT_FOUND',    // ffmpeg 找不到或无法启动
+  DEVICE_NOT_FOUND = 'DEVICE_NOT_FOUND',    // 麦克风设备找不到
+  PERMISSION_DENIED = 'PERMISSION_DENIED',  // 权限被拒绝
+  RECORDING_FAILED = 'RECORDING_FAILED',    // 录音失败（其他原因）
+  UNKNOWN = 'UNKNOWN'                        // 未知错误
+}
+
+// 录音错误分析结果
+export interface RecordingErrorInfo {
+  type: RecordingErrorType
+  title: string
+  message: string
+  action?: string  // 建议的操作
+}
 
 // 应用错误
 export interface AppError {

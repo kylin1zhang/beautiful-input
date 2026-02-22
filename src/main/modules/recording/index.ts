@@ -4,6 +4,7 @@ import { platform } from 'os'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { existsSync } from 'fs'
 import { app } from 'electron'
 import { VADModule } from '../vad/index.js'
 
@@ -56,6 +57,23 @@ export class RecordingModule extends EventEmitter {
       channels: options.channels ?? 1,
       bitDepth: options.bitDepth ?? 16
     }
+  }
+
+  /**
+   * 验证 ffmpeg 是否存在且可执行
+   * @returns { valid: boolean, path: string, error?: string }
+   */
+  verifyFfmpeg(): { valid: boolean; path: string; error?: string } {
+    const ffmpegPath = getFfmpegPath()
+
+    if (!existsSync(ffmpegPath)) {
+      const error = `ffmpeg 不存在于路径: ${ffmpegPath}`
+      console.error('[Recording]', error)
+      return { valid: false, path: ffmpegPath, error }
+    }
+
+    console.log('[Recording] ffmpeg 验证通过:', ffmpegPath)
+    return { valid: true, path: ffmpegPath }
   }
 
   /**
@@ -271,7 +289,14 @@ export class RecordingModule extends EventEmitter {
    */
   private async startWindowsRecording(): Promise<void> {
     return new Promise((resolve, reject) => {
-      // 先获取麦克风设备名称
+      // 先验证 ffmpeg 是否存在
+      const ffmpegCheck = this.verifyFfmpeg()
+      if (!ffmpegCheck.valid) {
+        reject(new Error(`ffmpeg 启动失败: ${ffmpegCheck.error}`))
+        return
+      }
+
+      // 获取麦克风设备名称
       this.getWindowsMicDevice().then((deviceName) => {
         if (!deviceName) {
           reject(new Error('找不到麦克风设备'))
@@ -307,43 +332,94 @@ export class RecordingModule extends EventEmitter {
   private async getWindowsMicDevice(): Promise<string | null> {
     return new Promise((resolve) => {
       const ffmpegPath = getFfmpegPath()
+
+      // 先验证 ffmpeg 是否存在
+      if (!existsSync(ffmpegPath)) {
+        console.error('[Recording] ffmpeg 不存在:', ffmpegPath)
+        resolve(null)
+        return
+      }
+
       const ffmpeg = spawn(ffmpegPath, ['-f', 'dshow', '-list_devices', 'true', '-i', 'dummy'], {
         stdio: ['ignore', 'pipe', 'pipe']
       })
 
       let output = ''
-      // ffmpeg 输出设备列表到 stderr
+      // ffmpeg 输出设备列表到 stderr，但也收集 stdout 以防万一
+      ffmpeg.stdout?.on('data', (data) => {
+        output += data.toString()
+      })
       ffmpeg.stderr?.on('data', (data) => {
         output += data.toString()
       })
 
-      ffmpeg.on('close', () => {
-        // 查找音频设备 - 格式: [dshow @ ...] "设备名称" (audio)
+      const timeout = setTimeout(() => {
+        console.log('[Recording] 获取设备列表超时')
+        ffmpeg.kill()
+        resolve(null)
+      }, 10000)
+
+      ffmpeg.on('close', (code) => {
+        clearTimeout(timeout)
+        console.log('[Recording] ffmpeg 列出设备完成，退出码:', code)
+        console.log('[Recording] 设备列表输出:\n', output)
+
+        // 尝试多种匹配模式
         const lines = output.split('\n')
         for (const line of lines) {
-          // 匹配 "设备名称" (audio) 格式
-          const match = line.match(/"([^"]+)"\s*\(\s*audio\s*\)/)
+          // 模式1: "设备名称" (audio)
+          let match = line.match(/"([^"]+)"\s*\(\s*audio\s*\)/i)
           if (match) {
             const deviceName = match[1].trim()
-            console.log('[Recording] 找到音频设备:', deviceName)
+            console.log('[Recording] 找到音频设备 (模式1):', deviceName)
             resolve(deviceName)
             return
           }
+
+          // 模式2: DirectShow audio devices (某些 ffmpeg 版本)
+          // [dshow @ ...]  "设备名称"
+          if (line.includes('DirectShow audio devices') || line.includes('音频设备')) {
+            // 继续找下一行的设备名称
+            const idx = lines.indexOf(line)
+            if (idx >= 0 && idx + 1 < lines.length) {
+              const nextLine = lines[idx + 1]
+              match = nextLine.match(/"([^"]+)"/)
+              if (match && !match[1].includes('DirectShow')) {
+                const deviceName = match[1].trim()
+                console.log('[Recording] 找到音频设备 (模式2):', deviceName)
+                resolve(deviceName)
+                return
+              }
+            }
+          }
+
+          // 模式3: 更宽松的匹配 - 任何带 audio 的引号内容
+          if (line.toLowerCase().includes('audio') && line.includes('"')) {
+            match = line.match(/"([^"]+)"/)
+            if (match) {
+              const deviceName = match[1].trim()
+              // 排除已知的非设备名称
+              if (!deviceName.includes('DirectShow') &&
+                  !deviceName.includes('@') &&
+                  deviceName.length > 0 &&
+                  deviceName.length < 100) {
+                console.log('[Recording] 找到音频设备 (模式3):', deviceName)
+                resolve(deviceName)
+                return
+              }
+            }
+          }
         }
-        console.log('[Recording] 未找到音频设备，完整输出:')
-        console.log(output)
+
+        console.log('[Recording] 未找到音频设备')
         resolve(null)
       })
 
       ffmpeg.on('error', (error) => {
+        clearTimeout(timeout)
         console.error('[Recording] ffmpeg 启动失败:', error)
         resolve(null)
       })
-
-      setTimeout(() => {
-        ffmpeg.kill()
-        resolve(null)
-      }, 10000)
     })
   }
 

@@ -19,7 +19,7 @@ import { LocalTranscriber } from './modules/local-transcriber/index.js'
 import { StoreService } from './services/store.service.js'
 
 // 类型和常量
-import { IpcChannels, UserSettings, LocalModelType } from '@shared/types/index.js'
+import { IpcChannels, UserSettings, LocalModelType, RecordingErrorType, RecordingErrorInfo } from '@shared/types/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -48,6 +48,61 @@ let isRecording = false
 let currentRecordingDuration = 0
 let recordingTimer: NodeJS.Timeout | null = null
 let isTranslateRecording = false  // 标记是否为翻译录音
+
+/**
+ * 分析录音错误，返回详细的错误信息
+ */
+function analyzeRecordingError(errorMessage: string): RecordingErrorInfo {
+  const lowerMsg = errorMessage.toLowerCase()
+
+  // ffmpeg 找不到或无法启动
+  if (lowerMsg.includes('spawn') && lowerMsg.includes('enoent')) {
+    return {
+      type: RecordingErrorType.FFMPEG_NOT_FOUND,
+      title: '程序文件损坏',
+      message: '录音组件缺失，请重新安装 BeautifulInput',
+      action: '重新下载安装'
+    }
+  }
+
+  // ffmpeg 相关错误
+  if (lowerMsg.includes('ffmpeg') || lowerMsg.includes('录音进程')) {
+    return {
+      type: RecordingErrorType.FFMPEG_NOT_FOUND,
+      title: '录音组件错误',
+      message: '录音组件启动失败，请重新安装 BeautifulInput',
+      action: '重新下载安装'
+    }
+  }
+
+  // 找不到麦克风设备
+  if (lowerMsg.includes('找不到麦克风') || lowerMsg.includes('找不到设备') || lowerMsg.includes('no audio device')) {
+    return {
+      type: RecordingErrorType.DEVICE_NOT_FOUND,
+      title: '找不到麦克风',
+      message: '未检测到麦克风设备，请检查设备连接',
+      action: '检查设备'
+    }
+  }
+
+  // 权限被拒绝
+  if (lowerMsg.includes('could not open audio device') || lowerMsg.includes('permission denied') || lowerMsg.includes('权限')) {
+    return {
+      type: RecordingErrorType.PERMISSION_DENIED,
+      title: '麦克风权限被拒绝',
+      message: '请在 Windows 设置中允许 BeautifulInput 访问麦克风',
+      action: '打开系统设置'
+    }
+  }
+
+  // 其他录音失败
+  return {
+    type: RecordingErrorType.RECORDING_FAILED,
+    title: '录音启动失败',
+    message: `录音启动失败: ${errorMessage}`,
+    action: '重试'
+  }
+}
 
 /**
  * 创建悬浮球窗口
@@ -420,30 +475,39 @@ async function startRecording(): Promise<void> {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error('[Main] 启动录音失败:', errorMessage)
 
-      // 检测是否是权限问题
-      if (errorMessage.includes('麦克风') || errorMessage.includes('设备') || errorMessage.includes('audio')) {
-        const errorMsg = '无法访问麦克风，请检查权限设置'
-        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-          status: 'error'
-        })
-        floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
-          type: 'PERMISSION_DENIED',
-          message: errorMsg
-        })
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'BeautifulInput 麦克风问题',
-            body: '请确保已开启"允许桌面应用访问麦克风"',
-            icon: getAppIcon()
-          }).show()
-        }
-        shell.openExternal('ms-settings:privacy-microphone')
-        setTimeout(() => {
-          floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-            status: 'idle'
-          })
-        }, 3000)
+      // 分析错误类型
+      const errorInfo = analyzeRecordingError(errorMessage)
+      console.error('[Main] 错误类型:', errorInfo.type, errorInfo.message)
+
+      // 更新悬浮球状态为错误
+      floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+        status: 'error'
+      })
+      floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
+        type: errorInfo.type,
+        message: errorInfo.message
+      })
+
+      // 显示通知
+      if (Notification.isSupported()) {
+        new Notification({
+          title: `BeautifulInput ${errorInfo.title}`,
+          body: errorInfo.message,
+          icon: getAppIcon()
+        }).show()
       }
+
+      // 如果是权限问题，打开系统设置
+      if (errorInfo.type === RecordingErrorType.PERMISSION_DENIED) {
+        shell.openExternal('ms-settings:privacy-microphone')
+      }
+
+      // 3秒后恢复空闲状态
+      setTimeout(() => {
+        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+          status: 'idle'
+        })
+      }, 3000)
       return
     }
     isRecording = true
@@ -754,18 +818,10 @@ async function quickTranslate(): Promise<void> {
 
   // 开始翻译录音
   try {
-    // 检查权限
+    // 尝试检测权限，但失败不阻止录音（实际录音时会验证）
     const hasPermission = await recordingModule.checkPermission()
     if (!hasPermission) {
-      const errorMsg = '请允许 BeautifulInput 访问麦克风'
-      if (Notification.isSupported()) {
-        new Notification({
-          title: 'BeautifulInput 错误',
-          body: errorMsg,
-          icon: getAppIcon()
-        }).show()
-      }
-      return
+      console.log('[Main] 权限检测未通过，但仍尝试录音')
     }
 
     const settings = settingsModule.getSettings()
