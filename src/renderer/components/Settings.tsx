@@ -1197,10 +1197,15 @@ const Settings: React.FC = () => {
                 </label>
                 <select
                   value={settings.aiProvider}
-                  onChange={e => updateSetting('aiProvider', e.target.value as 'deepseek' | 'qwen')}
+                  onChange={e => updateSetting('aiProvider', e.target.value)}
                 >
                   <option value="deepseek">DeepSeek</option>
                   <option value="qwen">千问 (通义千问)</option>
+                  <option value="groq">Groq</option>
+                  <option value="claude">Claude (Anthropic)</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="glm">智谱 GLM</option>
+                  <option value="local">本地 LLM (离线)</option>
                 </select>
                 <span className="help-text">
                   选择用于 AI 文本处理的服务提供商
@@ -1274,6 +1279,167 @@ const Settings: React.FC = () => {
                   <span className="help-text">
                     阿里云通义千问 API Key，<a href="https://dashscope.aliyun.com" target="_blank" rel="noreferrer">获取 API Key</a>
                   </span>
+                </div>
+              )}
+
+              {/* Groq API Key */}
+              {settings.aiProvider === 'groq' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    Groq API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type={showGroqKey ? 'text' : 'password'}
+                      value={settings.groqApiKey}
+                      onChange={e => updateSetting('groqApiKey', e.target.value)}
+                      onBlur={() => handleApiKeyBlur('groqApiKey', settings.groqApiKey)}
+                      placeholder="输入 Groq API Key"
+                    />
+                    <button
+                      className="input-action"
+                      onClick={() => setShowGroqKey(!showGroqKey)}
+                    >
+                      {showGroqKey ? <EyeOff /> : <Eye />}
+                    </button>
+                    <button
+                      className="input-action test-btn"
+                      onClick={() => testApiKey('groq')}
+                    >
+                      测试
+                    </button>
+                  </div>
+                  <span className="help-text">
+                    Groq API Key，<a href="https://console.groq.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
+
+              {/* Claude API Key */}
+              {settings.aiProvider === 'claude' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    Claude API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type="password"
+                      value={settings.aiProviders?.find(p => p.id === 'claude')?.apiKey || ''}
+                      onChange={e => {
+                        const providers = settings.aiProviders || []
+                        const existing = providers.find(p => p.id === 'claude')
+                        if (existing) {
+                          existing.apiKey = e.target.value
+                        } else {
+                          providers.push({
+                            id: 'claude',
+                            name: 'Claude',
+                            protocol: 'claude',
+                            apiKey: e.target.value,
+                            models: [],
+                            isEnabled: true
+                          })
+                        }
+                        updateSetting('aiProviders', [...providers])
+                      }}
+                      placeholder="输入 Claude API Key"
+                    />
+                  </div>
+                  <span className="help-text">
+                    Anthropic Claude API Key，<a href="https://console.anthropic.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
+
+              {/* Gemini API Key */}
+              {settings.aiProvider === 'gemini' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    Gemini API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type="password"
+                      value={settings.aiProviders?.find(p => p.id === 'gemini')?.apiKey || ''}
+                      onChange={e => {
+                        const providers = settings.aiProviders || []
+                        const existing = providers.find(p => p.id === 'gemini')
+                        if (existing) {
+                          existing.apiKey = e.target.value
+                        } else {
+                          providers.push({
+                            id: 'gemini',
+                            name: 'Gemini',
+                            protocol: 'gemini',
+                            apiKey: e.target.value,
+                            models: [],
+                            isEnabled: true
+                          })
+                        }
+                        updateSetting('aiProviders', [...providers])
+                      }}
+                      placeholder="输入 Gemini API Key"
+                    />
+                  </div>
+                  <span className="help-text">
+                    Google Gemini API Key，<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
+
+              {/* GLM API Key */}
+              {settings.aiProvider === 'glm' && (
+                <div className="form-group">
+                  <label>
+                    <Key className="label-icon" />
+                    智谱 API Key
+                    <span className="required">*</span>
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type="password"
+                      value={settings.aiProviders?.find(p => p.id === 'glm')?.apiKey || ''}
+                      onChange={e => {
+                        const providers = settings.aiProviders || []
+                        const existing = providers.find(p => p.id === 'glm')
+                        if (existing) {
+                          existing.apiKey = e.target.value
+                        } else {
+                          providers.push({
+                            id: 'glm',
+                            name: '智谱 GLM',
+                            protocol: 'openai-compatible',
+                            apiKey: e.target.value,
+                            models: [],
+                            isEnabled: true
+                          })
+                        }
+                        updateSetting('aiProviders', [...providers])
+                      }}
+                      placeholder="输入智谱 API Key"
+                    />
+                  </div>
+                  <span className="help-text">
+                    智谱 AI API Key，<a href="https://open.bigmodel.cn" target="_blank" rel="noreferrer">获取 API Key</a>
+                  </span>
+                </div>
+              )}
+
+              {/* 本地 LLM 提示 */}
+              {settings.aiProvider === 'local' && (
+                <div className="form-group">
+                  <label>本地 LLM (离线)</label>
+                  <p className="help-text" style={{ marginTop: '8px' }}>
+                    本地 LLM 功能允许在完全离线的情况下使用 AI 文本处理。
+                    <br />
+                    <strong>注意：</strong>此功能需要下载模型文件（约 1-2GB），目前仍在开发中。
+                  </p>
                 </div>
               )}
             </div>
