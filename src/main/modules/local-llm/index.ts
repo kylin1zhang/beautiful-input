@@ -26,6 +26,7 @@ export class LocalLLMModule extends EventEmitter {
   private currentBackend: 'cpu' | 'cuda' | 'metal' = 'cpu'
   private hardwareInfo: LLMHardwareInfo | null = null
   private config: LocalLLMConfig | null = null
+  private customBasePath: string | null = null  // 自定义基础路径
 
   // 暴露子模块
   readonly hardwareDetector = llmHardwareDetector
@@ -62,9 +63,32 @@ export class LocalLLMModule extends EventEmitter {
    * 获取模型存储目录
    */
   getModelsDir(): string {
-    // 使用与 Whisper 相同的基础路径
+    if (this.customBasePath) {
+      // 使用自定义路径，LLM 模型存放在 llm-models 子目录
+      return join(this.customBasePath, 'llm-models')
+    }
+    // 默认路径：userData/models/llm
     const userDataPath = app.getPath('userData')
     return join(userDataPath, 'models', 'llm')
+  }
+
+  /**
+   * 设置自定义基础路径（与 Whisper 共享同一个基础路径）
+   */
+  setCustomBasePath(path: string | null): void {
+    this.customBasePath = path
+  }
+
+  /**
+   * 获取当前使用的基础路径
+   */
+  getBasePath(): { current: string; isCustom: boolean; default: string } {
+    const defaultPath = join(app.getPath('userData'), 'models')
+    return {
+      current: this.customBasePath || defaultPath,
+      isCustom: this.customBasePath !== null,
+      default: defaultPath
+    }
   }
 
   /**
@@ -142,16 +166,28 @@ export class LocalLLMModule extends EventEmitter {
    * 获取资源路径
    */
   private getResourcePath(exeName: string): string {
-    // 生产环境
+    // 生产环境 - llama 子目录
     const resourcePath = join(process.resourcesPath, 'llama', exeName)
     if (existsSync(resourcePath)) {
       return resourcePath
     }
 
-    // 开发环境
+    // 生产环境 - resources 根目录（兼容）
+    const resourcePathRoot = join(process.resourcesPath, exeName)
+    if (existsSync(resourcePathRoot)) {
+      return resourcePathRoot
+    }
+
+    // 开发环境 - llama 子目录
     const devPath = join(__dirname, '../../../../resources/llama', exeName)
     if (existsSync(devPath)) {
       return devPath
+    }
+
+    // 开发环境 - resources 根目录（兼容）
+    const devPathRoot = join(__dirname, '../../../../resources', exeName)
+    if (existsSync(devPathRoot)) {
+      return devPathRoot
     }
 
     // 假设在 PATH 中
@@ -187,6 +223,9 @@ export class LocalLLMModule extends EventEmitter {
     }
 
     const llamaExe = this.getExecutablePath(backend)
+    console.log(`[LocalLLM] 可执行文件路径: ${llamaExe}`)
+    console.log(`[LocalLLM] 文件存在: ${existsSync(llamaExe)}`)
+
     const threads = options.threads || 4
     const gpuLayers = options.gpuLayers !== undefined ? options.gpuLayers : (backend === 'cpu' ? 0 : 35)
 

@@ -54,7 +54,8 @@
       "Skill(glm-plan-usage:usage-query)",
       "Bash(npx electron-builder:*)",
       "Bash(cmd:*)",
-      "Bash(\"E:\\\\下载\\\\Kimi_Agent_语音输入工具设计\\\\typeless\\\\release\\\\win-unpacked\\\\BeautifulInput.exe\")"
+      "Bash(\"E:\\\\下载\\\\Kimi_Agent_语音输入工具设计\\\\typeless\\\\release\\\\win-unpacked\\\\BeautifulInput.exe\")",
+      "Bash(unzip:*)"
     ]
   }
 }

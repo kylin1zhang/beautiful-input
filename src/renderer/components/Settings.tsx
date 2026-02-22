@@ -384,7 +384,7 @@ const Settings: React.FC = () => {
 
       // 确认是否迁移
       const confirmed = window.confirm(
-        `确定要将模型存储位置更改为以下路径吗？\n\n${newPath}\n\n已下载的模型将自动迁移到新位置。`
+        `确定要将所有模型存储位置更改为以下路径吗？\n\n${newPath}\n\n包括：语音识别模型、大语言模型等所有已下载的模型将自动迁移到新位置。`
       )
       if (!confirmed) return
 
@@ -1173,9 +1173,9 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 模型存储位置 */}
+                  {/* 模型存储位置（统一管理所有模型） */}
                   <div className="form-group">
-                    <label>模型存储位置</label>
+                    <label>所有模型存储位置</label>
                     <div className="models-path-config">
                       {modelsPathConfig ? (
                         <>
@@ -1223,7 +1223,7 @@ const Settings: React.FC = () => {
                       )}
                     </div>
                     <span className="help-text">
-                      模型和 Whisper 程序将存储在此位置。更改位置时，已有文件将自动迁移。
+                      此位置用于存储所有模型文件，包括：语音识别模型 (Whisper)、大语言模型 (LLM) 等。更改位置时，已有文件将自动迁移到新位置。
                     </span>
                   </div>
 

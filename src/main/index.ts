@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, shell, Notification } from 'electron'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { existsSync } from 'fs'
+import { mkdir, rename } from 'fs/promises'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 
 // 模块导入
@@ -1202,20 +1204,48 @@ function registerIpcHandlers(): void {
     const defaultParentPath = modelManager.getDefaultParentPath()
     const isResetToDefault = newPath === defaultParentPath
 
+    // 迁移 Whisper 模型和程序
     const result = await modelManager.migrateToPath(newPath)
-    if (result.success) {
-      // 更新设置中的路径
-      const currentSettings = settingsModule.getSettings()
-      settingsModule.setSettings({
-        ...currentSettings,
-        localModel: {
-          ...currentSettings.localModel,
-          // 如果是恢复默认，设置为 undefined，否则设置新路径
-          customModelsPath: isResetToDefault ? undefined : newPath
-        }
-      })
+    if (!result.success) {
+      return result
     }
-    return result
+
+    // 迁移 LLM 模型
+    const oldLLMPath = localLLMModule.getModelsDir()
+    const newLLMPath = join(newPath, 'llm-models')
+
+    if (existsSync(oldLLMPath) && oldLLMPath !== newLLMPath) {
+      console.log(`[Main] 迁移 LLM 模型: ${oldLLMPath} -> ${newLLMPath}`)
+      try {
+        // 确保目标目录的父目录存在
+        await mkdir(dirname(newLLMPath), { recursive: true })
+
+        // 移动整个目录
+        if (!existsSync(newLLMPath)) {
+          await rename(oldLLMPath, newLLMPath)
+          console.log('[Main] LLM 模型迁移完成')
+        }
+      } catch (error) {
+        console.error('[Main] LLM 模型迁移失败:', error)
+        // 不阻止整体迁移，只是记录错误
+      }
+    }
+
+    // 更新 LLM 模块的路径
+    localLLMModule.setCustomBasePath(isResetToDefault ? null : newPath)
+
+    // 更新设置中的路径
+    const currentSettings = settingsModule.getSettings()
+    settingsModule.setSettings({
+      ...currentSettings,
+      localModel: {
+        ...currentSettings.localModel,
+        // 如果是恢复默认，设置为 undefined，否则设置新路径
+        customModelsPath: isResetToDefault ? undefined : newPath
+      }
+    })
+
+    return { success: true }
   })
 
   ipcMain.handle(IpcChannels.GET_DISK_SPACE, (_, path?: string) => {
@@ -1308,13 +1338,14 @@ app.whenReady().then(async () => {
   // 设置 LocalTranscriber 的 ModelManager 引用
   localTranscriber.setModelManager(modelManager)
 
-  // 从设置中读取自定义模型路径
+  // 从设置中读取自定义模型路径（Whisper 和 LLM 共用）
   const settings = settingsModule.getSettings()
   console.log('[Main] 设置中的 customModelsPath:', settings.localModel?.customModelsPath)
   if (settings.localModel?.customModelsPath) {
     modelManager.setCustomPath(settings.localModel.customModelsPath)
-    console.log('[Main] 模型路径:', modelManager.getModelsPath())
-    console.log('[Main] Whisper 路径:', modelManager.getWhisperPath())
+    localLLMModule.setCustomBasePath(settings.localModel.customModelsPath)
+    console.log('[Main] Whisper 模型路径:', modelManager.getModelsPath())
+    console.log('[Main] LLM 模型路径:', localLLMModule.getModelsDir())
   }
 
   // 监听模型下载进度，转发到渲染进程（同时发送到设置窗口）
