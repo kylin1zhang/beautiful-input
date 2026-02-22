@@ -4,7 +4,9 @@ import { BaseAIProvider } from './providers/base.js'
 import { OpenAICompatibleProvider } from './providers/openai-compatible.js'
 import { ClaudeProvider } from './providers/claude.js'
 import { GeminiProvider } from './providers/gemini.js'
+import { LocalLLMProvider } from './providers/local-llm.js'
 import { AIProviderConfig, AIModelConfig } from '@shared/types/index.js'
+import { LOCAL_LLM_MODELS } from '../local-llm/model-configs.js'
 
 /**
  * 内置 AI 服务提供商配置
@@ -86,6 +88,18 @@ export const BUILTIN_PROVIDERS: AIProviderConfig[] = [
       { id: 'glm-4', name: 'GLM-4' },
       { id: 'glm-4-plus', name: 'GLM-4 Plus' }
     ]
+  },
+  {
+    id: 'local',
+    name: '本地 LLM (离线)',
+    protocol: 'local',
+    isBuiltIn: true,
+    isEnabled: true,
+    models: LOCAL_LLM_MODELS.map(m => ({
+      id: m.id,
+      name: m.name,
+      isDefault: m.recommended
+    }))
   }
 ]
 
@@ -135,9 +149,7 @@ export class ProviderRegistry {
       case 'gemini':
         return new GeminiProvider()
       case 'local':
-        // LocalLLM Provider 将在后续 Task 中实现
-        console.log('[ProviderRegistry] Local LLM Provider 尚未实现')
-        return null
+        return new LocalLLMProvider()
       default:
         console.warn(`[ProviderRegistry] 未知的协议类型: ${(config as AIProviderConfig).protocol}`)
         return null
