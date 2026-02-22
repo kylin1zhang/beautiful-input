@@ -18,6 +18,65 @@ export interface ProcessingResult {
   duration: number
 }
 
+// ===== AI Provider 相关类型 =====
+
+/** AI 服务协议类型 */
+export type AIProtocol = 'openai-compatible' | 'claude' | 'gemini' | 'local'
+
+/** AI 模型配置 */
+export interface AIModelConfig {
+  id: string
+  name: string
+  maxTokens?: number
+  isDefault?: boolean
+  isEnabled?: boolean
+}
+
+/** AI 服务提供商配置 */
+export interface AIProviderConfig {
+  id: string
+  name: string
+  protocol: AIProtocol
+  baseUrl?: string
+  apiKey?: string
+  models: AIModelConfig[]
+  defaultModel?: string
+  isEnabled: boolean
+  isBuiltIn?: boolean
+}
+
+/** 本地 LLM 模型信息 */
+export interface LocalLLMModel {
+  id: string
+  name: string
+  url: string
+  size: string
+  sizeBytes: number
+  ramRequired: string
+  recommended?: boolean
+  downloaded?: boolean
+}
+
+/** 本地 LLM 配置 */
+export interface LocalLLMConfig {
+  enabled: boolean
+  modelPath?: string
+  builtinModelId?: string
+  port: number
+  autoStart: boolean
+}
+
+/** AI 处理请求（内部使用） */
+export interface AIProcessRequest {
+  prompt: string
+  model: string
+  apiKey?: string
+  baseUrl?: string
+  maxTokens?: number
+  temperature?: number
+  systemPrompt?: string
+}
+
 // 用户设置
 export interface UserSettings {
   // API 配置
@@ -26,7 +85,10 @@ export interface UserSettings {
   deepseekApiKey: string
   qwenApiKey: string
   asrProvider: 'groq' | 'openai' | 'local'  // 语音识别服务提供商选择
-  aiProvider: 'deepseek' | 'qwen'  // AI 服务提供商选择
+  aiProvider: string  // AI 服务提供商 ID（扩展为支持多种提供商）
+  aiModel?: string    // 当前选中的模型 ID
+  aiProviders?: AIProviderConfig[]  // 所有提供商配置（可选，用于自定义）
+  localLLM?: LocalLLMConfig  // 本地 LLM 配置
 
   // 快捷键设置
   shortcuts: {
@@ -70,6 +132,13 @@ export const defaultSettings: UserSettings = {
   qwenApiKey: '',
   asrProvider: 'groq',
   aiProvider: 'deepseek',
+  aiModel: 'deepseek-chat',
+  aiProviders: [],  // 由 ProviderRegistry 初始化
+  localLLM: {
+    enabled: false,
+    port: 8765,
+    autoStart: false
+  },
   shortcuts: {
     toggleRecording: 'Alt+Shift+R',
     quickTranslate: 'Alt+Shift+T'
@@ -255,7 +324,21 @@ export enum IpcChannels {
   SELECT_MODELS_PATH = 'select-models-path',
   MIGRATE_MODELS = 'migrate-models',
   GET_DISK_SPACE = 'get-disk-space',
-  MODELS_MIGRATE_PROGRESS = 'models-migrate-progress'
+  MODELS_MIGRATE_PROGRESS = 'models-migrate-progress',
+
+  // AI Provider 相关
+  GET_AI_PROVIDERS = 'get-ai-providers',
+  SET_AI_PROVIDER = 'set-ai-provider',
+  VALIDATE_AI_API_KEY = 'validate-ai-api-key',
+  ADD_CUSTOM_AI_PROVIDER = 'add-custom-ai-provider',
+  REMOVE_AI_PROVIDER = 'remove-ai-provider',
+
+  // 本地 LLM 相关
+  GET_LOCAL_LLM_MODELS = 'get-local-llm-models',
+  DOWNLOAD_LOCAL_LLM_MODEL = 'download-local-llm-model',
+  DELETE_LOCAL_LLM_MODEL = 'delete-local-llm-model',
+  GET_LOCAL_LLM_STATUS = 'get-local-llm-status',
+  LOCAL_LLM_DOWNLOAD_PROGRESS = 'local-llm-download-progress'
 }
 
 // 支持的语言列表
