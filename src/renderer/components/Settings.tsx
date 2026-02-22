@@ -16,7 +16,7 @@ import {
   CircleX,
   Clock
 } from 'lucide-react'
-import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType, ModelDownloadState, ModelsMigrateState } from '@shared/types/index.js'
+import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType, ModelDownloadState, ModelsMigrateState, LocalLLMModel, LLMHardwareInfo, LLMDownloadProgress } from '@shared/types/index.js'
 import './Settings.css'
 
 // 快捷键录制组件
@@ -239,6 +239,13 @@ const Settings: React.FC = () => {
   const [migrating, setMigrating] = useState(false)
   const [migrateProgress, setMigrateProgress] = useState<ModelsMigrateState | null>(null)
 
+  // 本地 LLM 相关状态
+  const [llmModels, setLLMModels] = useState<LocalLLMModel[]>([])
+  const [llmHardwareInfo, setLLMHardwareInfo] = useState<LLMHardwareInfo | null>(null)
+  const [llmStatus, setLLMStatus] = useState<{ isRunning: boolean; port: number; model: string; backend: string } | null>(null)
+  const [downloadingLLMModel, setDownloadingLLMModel] = useState<string | null>(null)
+  const [llmDownloadProgress, setLLMDownloadProgress] = useState<LLMDownloadProgress | null>(null)
+
   // 自动保存定时器引用
   const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null)
 
@@ -252,6 +259,7 @@ const Settings: React.FC = () => {
     loadHardwareInfo()
     checkWhisperStatus()
     loadModelsPathConfig()
+    loadLLMData()
 
     // 定义进度回调函数
     const handleDownloadProgress = (_: unknown, data: ModelDownloadState) => {
@@ -287,16 +295,39 @@ const Settings: React.FC = () => {
       }
     }
 
+    // 定义 LLM 下载进度回调
+    const handleLLMDownloadProgress = (_: unknown, data: LLMDownloadProgress) => {
+      setLLMDownloadProgress(data)
+      if (data.status === 'completed') {
+        setDownloadingLLMModel(null)
+        setLLMDownloadProgress(null)
+        loadLLMModels()
+        showMessage('success', `${data.modelId} 下载完成`)
+      } else if (data.status === 'error') {
+        setDownloadingLLMModel(null)
+        setLLMDownloadProgress(null)
+        showMessage('error', data.error || '下载失败')
+      } else if (data.status === 'cancelled') {
+        setDownloadingLLMModel(null)
+        setLLMDownloadProgress(null)
+        showMessage('success', '下载已取消')
+      }
+    }
+
     // 监听模型下载进度
     window.electronAPI.onModelDownloadProgress(handleDownloadProgress)
 
     // 监听迁移进度
     window.electronAPI.onModelsMigrateProgress(handleMigrateProgress)
 
+    // 监听 LLM 下载进度
+    window.electronAPI.onLLMDownloadProgress(handleLLMDownloadProgress)
+
     // 清理函数：移除监听器
     return () => {
       window.electronAPI.removeAllListeners('model-download-progress')
       window.electronAPI.removeAllListeners('models-migrate-progress')
+      window.electronAPI.removeAllListeners('local-llm-download-progress')
     }
   }, [])
 
@@ -489,6 +520,110 @@ const Settings: React.FC = () => {
       showMessage('success', '模型已删除')
     } catch (error) {
       showMessage('error', '删除失败')
+    }
+  }
+
+  // ===== 本地 LLM 相关函数 =====
+
+  // 加载本地 LLM 数据
+  const loadLLMData = async () => {
+    await Promise.all([loadLLMModels(), loadLLMStatus()])
+  }
+
+  // 加载本地 LLM 模型列表
+  const loadLLMModels = async () => {
+    try {
+      const models = await window.electronAPI.getLocalLLMModels()
+      setLLMModels(models)
+    } catch (error) {
+      console.error('加载 LLM 模型列表失败:', error)
+    }
+  }
+
+  // 加载本地 LLM 服务状态
+  const loadLLMStatus = async () => {
+    try {
+      const status = await window.electronAPI.getLocalLLMStatus()
+      setLLMStatus(status)
+    } catch (error) {
+      console.error('加载 LLM 状态失败:', error)
+    }
+  }
+
+  // 检测 LLM 硬件
+  const detectLLMHardware = async () => {
+    showMessage('success', '正在检测硬件...')
+    try {
+      const info = await window.electronAPI.detectLLMHardware()
+      setLLMHardwareInfo(info)
+      showMessage('success', `检测完成: ${info.hasNvidia ? info.nvidiaGpuName : info.isAppleSilicon ? 'Apple Silicon' : 'CPU'}`)
+    } catch (error) {
+      showMessage('error', '硬件检测失败')
+    }
+  }
+
+  // 下载 LLM 模型
+  const handleDownloadLLMModel = async (modelId: string) => {
+    if (downloadingLLMModel) {
+      showMessage('error', '请等待当前下载完成')
+      return
+    }
+
+    setDownloadingLLMModel(modelId)
+    setLLMDownloadProgress(null)
+
+    try {
+      await window.electronAPI.downloadLocalLLMModel(modelId)
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      showMessage('error', `下载失败: ${errorMessage}`)
+      setDownloadingLLMModel(null)
+      setLLMDownloadProgress(null)
+    }
+  }
+
+  // 取消 LLM 模型下载
+  const handleCancelLLMDownload = (modelId: string) => {
+    window.electronAPI.cancelLLMDownload(modelId)
+    setDownloadingLLMModel(null)
+    setLLMDownloadProgress(null)
+  }
+
+  // 删除 LLM 模型
+  const handleDeleteLLMModel = async (modelId: string) => {
+    if (!window.confirm('确定要删除此模型吗？')) return
+
+    try {
+      await window.electronAPI.deleteLocalLLMModel(modelId)
+      await loadLLMModels()
+      showMessage('success', '模型已删除')
+    } catch (error) {
+      showMessage('error', '删除失败')
+    }
+  }
+
+  // 启动 LLM 服务
+  const handleStartLLM = async (modelId: string) => {
+    try {
+      showMessage('success', '正在启动 LLM 服务...')
+      const port = await window.electronAPI.startLocalLLM(modelId, {
+        backend: llmHardwareInfo?.recommendedBackend || 'cpu'
+      })
+      await loadLLMStatus()
+      showMessage('success', `LLM 服务已启动，端口: ${port}`)
+    } catch (error) {
+      showMessage('error', `启动失败: ${(error as Error).message}`)
+    }
+  }
+
+  // 停止 LLM 服务
+  const handleStopLLM = async () => {
+    try {
+      await window.electronAPI.stopLocalLLM()
+      await loadLLMStatus()
+      showMessage('success', 'LLM 服务已停止')
+    } catch (error) {
+      showMessage('error', '停止失败')
     }
   }
 
@@ -1431,15 +1566,187 @@ const Settings: React.FC = () => {
                 </div>
               )}
 
-              {/* 本地 LLM 提示 */}
+              {/* 本地 LLM 配置 */}
               {settings.aiProvider === 'local' && (
-                <div className="form-group">
-                  <label>本地 LLM (离线)</label>
-                  <p className="help-text" style={{ marginTop: '8px' }}>
-                    本地 LLM 功能允许在完全离线的情况下使用 AI 文本处理。
-                    <br />
-                    <strong>注意：</strong>此功能需要下载模型文件（约 1-2GB），目前仍在开发中。
-                  </p>
+                <div className="local-model-section">
+                  <h4>本地 LLM 设置</h4>
+
+                  {/* 硬件检测 */}
+                  <div className="form-group">
+                    <label>硬件检测</label>
+                    <div className="hardware-info">
+                      {llmHardwareInfo ? (
+                        <>
+                          <p>
+                            <strong>检测结果：</strong>
+                            {llmHardwareInfo.hasNvidia && llmHardwareInfo.nvidiaGpuName
+                              ? `${llmHardwareInfo.nvidiaGpuName} (${llmHardwareInfo.vram}MB VRAM)`
+                              : llmHardwareInfo.isAppleSilicon
+                                ? 'Apple Silicon (Metal 加速)'
+                                : '仅 CPU'}
+                          </p>
+                          <p>
+                            <strong>系统内存：</strong>{llmHardwareInfo.totalMemory} GB
+                          </p>
+                          <p>
+                            <strong>推荐后端：</strong>{llmHardwareInfo.recommendedBackend.toUpperCase()}
+                          </p>
+                          <p>
+                            <strong>推荐模型：</strong>{llmModels.find(m => m.id === llmHardwareInfo.recommendedModel)?.name || llmHardwareInfo.recommendedModel}
+                          </p>
+                        </>
+                      ) : (
+                        <p>尚未检测硬件</p>
+                      )}
+                      <button className="btn btn-secondary" onClick={detectLLMHardware}>
+                        {llmHardwareInfo ? '重新检测' : '检测硬件'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 服务状态 */}
+                  <div className="form-group">
+                    <label>服务状态</label>
+                    <div className="llm-status">
+                      {llmStatus?.isRunning ? (
+                        <div className="status-running">
+                          <span className="status-indicator running" />
+                          <span>运行中 - 端口 {llmStatus.port}，模型 {llmModels.find(m => m.id === llmStatus.model)?.name || llmStatus.model}</span>
+                          <button className="btn btn-secondary" onClick={handleStopLLM}>
+                            停止服务
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="status-stopped">
+                          <span className="status-indicator stopped" />
+                          <span>未运行</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 模型列表 */}
+                  <div className="form-group">
+                    <label>LLM 模型</label>
+                    <div className="model-list">
+                      {llmModels.map(model => (
+                        <div key={model.id} className="model-item">
+                          <div className="model-info">
+                            <span className="model-name">{model.name}</span>
+                            <span className="model-size">{model.size}</span>
+                            {model.recommended && <span className="model-badge recommended">推荐</span>}
+                            {model.gpuRecommended && <span className="model-badge gpu">GPU 推荐</span>}
+                            {model.downloaded && <span className="model-status downloaded">✓ 已下载</span>}
+                            {model.description && (
+                              <span className="model-description">{model.description}</span>
+                            )}
+                          </div>
+                          <div className="model-actions">
+                            {!model.downloaded && (
+                              <>
+                                {downloadingLLMModel === model.id && llmDownloadProgress ? (
+                                  <div className="download-progress">
+                                    <div className="progress-bar">
+                                      <div
+                                        className="progress-fill"
+                                        style={{ width: `${llmDownloadProgress.progress}%` }}
+                                      />
+                                    </div>
+                                    <span>{llmDownloadProgress.progress}%</span>
+                                    <button
+                                      className="btn btn-small btn-danger"
+                                      onClick={() => handleCancelLLMDownload(model.id)}
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                ) : downloadingLLMModel ? (
+                                  <button className="btn btn-small" disabled>
+                                    等待中...
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn btn-small"
+                                    onClick={() => handleDownloadLLMModel(model.id)}
+                                  >
+                                    下载
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {model.downloaded && !llmStatus?.isRunning && (
+                              <button
+                                className="btn btn-small btn-primary"
+                                onClick={() => handleStartLLM(model.id)}
+                              >
+                                启动
+                              </button>
+                            )}
+                            {model.downloaded && llmStatus?.isRunning && llmStatus.model === model.id && (
+                              <span className="running-label">运行中</span>
+                            )}
+                            {model.downloaded && (
+                              <button
+                                className="btn btn-small btn-danger"
+                                onClick={() => handleDeleteLLMModel(model.id)}
+                                disabled={llmStatus?.model === model.id}
+                              >
+                                删除
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <span className="help-text">
+                      下载模型后点击"启动"即可使用本地 AI 处理。模型文件较大，请确保有足够磁盘空间。
+                    </span>
+                  </div>
+
+                  {/* 高级设置 */}
+                  <div className="form-group">
+                    <label>
+                      <Settings2 className="label-icon" />
+                      高级设置
+                    </label>
+                    <div className="advanced-settings">
+                      <div className="setting-row">
+                        <span>线程数</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="16"
+                          value={settings.localLLM?.threads || 4}
+                          onChange={e => updateSetting('localLLM', {
+                            ...settings.localLLM,
+                            enabled: settings.localLLM?.enabled ?? false,
+                            port: settings.localLLM?.port ?? 8765,
+                            autoStart: settings.localLLM?.autoStart ?? false,
+                            threads: parseInt(e.target.value) || 4
+                          })}
+                        />
+                      </div>
+                      {(llmHardwareInfo?.hasNvidia || llmHardwareInfo?.isAppleSilicon) && (
+                        <div className="setting-row">
+                          <span>GPU 层数</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={settings.localLLM?.gpuLayers ?? 35}
+                            onChange={e => updateSetting('localLLM', {
+                              ...settings.localLLM,
+                              enabled: settings.localLLM?.enabled ?? false,
+                              port: settings.localLLM?.port ?? 8765,
+                              autoStart: settings.localLLM?.autoStart ?? false,
+                              gpuLayers: parseInt(e.target.value) ?? 35
+                            })}
+                          />
+                          <span className="help-text inline">0 = 仅 CPU</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
