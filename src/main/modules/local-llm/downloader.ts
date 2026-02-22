@@ -112,10 +112,10 @@ export class LLMModelDownloader extends EventEmitter {
 
       response.data.pipe(writer)
 
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve)
-        writer.on('error', reject)
-        response.data.on('error', reject)
+      await new Promise<void>((resolve, reject) => {
+        writer.on('finish', () => resolve())
+        writer.on('error', (err) => reject(err))
+        response.data.on('error', (err: Error) => reject(err))
       })
 
       this.emit('progress', {

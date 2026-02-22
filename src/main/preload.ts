@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState, AIProviderConfig, LocalLLMModel } from '@shared/types'
+import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState, AIProviderConfig, LocalLLMModel, LLMHardwareInfo, LLMDownloadProgress } from '@shared/types'
 
 // API 类型定义
 interface BeautifulInputAPI {
@@ -101,7 +101,14 @@ interface BeautifulInputAPI {
 
   // 本地 LLM
   getLocalLLMModels: () => Promise<LocalLLMModel[]>
-  getLocalLLMStatus: () => Promise<{ isRunning: boolean; port: number; model: string }>
+  getLocalLLMStatus: () => Promise<{ isRunning: boolean; port: number; model: string; backend: string }>
+  detectLLMHardware: () => Promise<LLMHardwareInfo>
+  downloadLocalLLMModel: (modelId: string) => Promise<string>
+  startLocalLLM: (modelId: string, options?: { port?: number; threads?: number; gpuLayers?: number; backend?: 'cpu' | 'cuda' | 'metal' }) => Promise<number>
+  stopLocalLLM: () => Promise<void>
+  cancelLLMDownload: (modelId: string) => Promise<void>
+  deleteLocalLLMModel: (modelId: string) => Promise<boolean>
+  onLLMDownloadProgress: (callback: (event: unknown, data: LLMDownloadProgress) => void) => void
 
   // 移除监听器
   removeAllListeners: (channel: string) => void
@@ -207,6 +214,15 @@ const api: BeautifulInputAPI = {
   // 本地 LLM
   getLocalLLMModels: () => ipcRenderer.invoke(IpcChannels.GET_LOCAL_LLM_MODELS),
   getLocalLLMStatus: () => ipcRenderer.invoke(IpcChannels.GET_LOCAL_LLM_STATUS),
+  detectLLMHardware: () => ipcRenderer.invoke(IpcChannels.DETECT_LLM_HARDWARE),
+  downloadLocalLLMModel: (modelId) => ipcRenderer.invoke(IpcChannels.DOWNLOAD_LOCAL_LLM_MODEL, modelId),
+  startLocalLLM: (modelId, options) => ipcRenderer.invoke(IpcChannels.START_LOCAL_LLM, modelId, options),
+  stopLocalLLM: () => ipcRenderer.invoke(IpcChannels.STOP_LOCAL_LLM),
+  cancelLLMDownload: (modelId) => ipcRenderer.invoke(IpcChannels.CANCEL_LLM_DOWNLOAD, modelId),
+  deleteLocalLLMModel: (modelId) => ipcRenderer.invoke(IpcChannels.DELETE_LOCAL_LLM_MODEL, modelId),
+  onLLMDownloadProgress: (callback) => {
+    ipcRenderer.on(IpcChannels.LOCAL_LLM_DOWNLOAD_PROGRESS, callback)
+  },
 
   // 移除监听器
   removeAllListeners: (channel) => {

@@ -5,14 +5,40 @@ import { app } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { EventEmitter } from 'events'
-import { LocalLLMModel, LocalLLMConfig } from '@shared/types/index.js'
-import { LOCAL_LLM_MODELS, LOCAL_LLM_MIRROR_URLS } from './model-configs.js'
+import axios from 'axios'
+import { LocalLLMModel, LocalLLMConfig, LLMHardwareInfo, LLMDownloadProgress } from '@shared/types/index.js'
+import { LOCAL_LLM_MODELS } from './model-configs.js'
+import { llmHardwareDetector } from './hardware-detector.js'
+import { llmModelDownloader } from './downloader.js'
+
+export interface LLMStatus {
+  isRunning: boolean
+  port: number
+  model: string
+  backend: 'cpu' | 'cuda' | 'metal'
+}
 
 export class LocalLLMModule extends EventEmitter {
   private process: ChildProcess | null = null
   private currentPort: number = 0
   private isRunning: boolean = false
   private currentModel: string = ''
+  private currentBackend: 'cpu' | 'cuda' | 'metal' = 'cpu'
+  private hardwareInfo: LLMHardwareInfo | null = null
+  private config: LocalLLMConfig | null = null
+
+  // 暴露子模块
+  readonly hardwareDetector = llmHardwareDetector
+  readonly downloader = llmModelDownloader
+
+  constructor() {
+    super()
+
+    // 转发下载进度事件
+    this.downloader.on('progress', (progress: LLMDownloadProgress) => {
+      this.emit('download-progress', progress)
+    })
+  }
 
   /**
    * 获取内置模型列表
@@ -33,10 +59,10 @@ export class LocalLLMModule extends EventEmitter {
   }
 
   /**
-   * 获取模型存储路径
+   * 获取模型存储目录
    */
-  private getModelsDir(): string {
-    // 使用与 Whisper 相同的存储路径
+  getModelsDir(): string {
+    // 使用与 Whisper 相同的基础路径
     const userDataPath = app.getPath('userData')
     return join(userDataPath, 'models', 'llm')
   }
@@ -49,31 +75,104 @@ export class LocalLLMModule extends EventEmitter {
   }
 
   /**
+   * 检测硬件
+   */
+  async detectHardware(): Promise<LLMHardwareInfo> {
+    this.hardwareInfo = await this.hardwareDetector.detect()
+    return this.hardwareInfo
+  }
+
+  /**
+   * 获取缓存的硬件信息
+   */
+  getHardwareInfo(): LLMHardwareInfo | null {
+    return this.hardwareInfo
+  }
+
+  /**
+   * 下载模型
+   */
+  async downloadModel(modelId: string): Promise<string> {
+    const model = LOCAL_LLM_MODELS.find(m => m.id === modelId)
+    if (!model) {
+      throw new Error(`未找到模型: ${modelId}`)
+    }
+    return this.downloader.downloadModel(model, this.getModelsDir())
+  }
+
+  /**
+   * 取消下载
+   */
+  cancelDownload(modelId: string): void {
+    this.downloader.cancelDownload(modelId)
+  }
+
+  /**
+   * 删除模型
+   */
+  deleteModel(modelId: string): boolean {
+    // 如果正在使用该模型，先停止
+    if (this.currentModel === modelId && this.isRunning) {
+      this.stopServer()
+    }
+    return this.downloader.deleteModel(modelId, this.getModelsDir())
+  }
+
+  /**
    * 获取 llama.cpp 可执行文件路径
    */
-  private getLlamaExePath(): string {
+  private getExecutablePath(backend: 'cpu' | 'cuda' | 'metal'): string {
     const platform = process.platform
-    const exeName = platform === 'win32' ? 'llama-server.exe' : 'llama-server'
 
-    // 先检查资源目录
+    if (platform === 'win32') {
+      if (backend === 'cuda') {
+        // CUDA 版本
+        const cudaPath = this.getResourcePath('llama-server-cuda.exe')
+        if (existsSync(cudaPath)) return cudaPath
+      }
+      // CPU 版本
+      return this.getResourcePath('llama-server.exe')
+    }
+
+    // macOS / Linux（单一 binary）
+    return this.getResourcePath('llama-server')
+  }
+
+  /**
+   * 获取资源路径
+   */
+  private getResourcePath(exeName: string): string {
+    // 生产环境
     const resourcePath = join(process.resourcesPath, 'llama', exeName)
     if (existsSync(resourcePath)) {
       return resourcePath
     }
 
-    // 开发环境路径
+    // 开发环境
     const devPath = join(__dirname, '../../../../resources/llama', exeName)
     if (existsSync(devPath)) {
       return devPath
     }
 
-    return exeName  // 假设在 PATH 中
+    // 假设在 PATH 中
+    return exeName
   }
 
   /**
-   * 启动 llama.cpp 服务
+   * 启动 llama-server
    */
-  async startServer(modelId: string, port: number = 8765): Promise<number> {
+  async startServer(
+    modelId: string,
+    options: {
+      port?: number
+      threads?: number
+      gpuLayers?: number
+      backend?: 'cpu' | 'cuda' | 'metal'
+    } = {}
+  ): Promise<number> {
+    const port = options.port || 8765
+    const backend = options.backend || this.hardwareInfo?.recommendedBackend || 'cpu'
+
     // 如果已经是同一个模型在运行，直接返回
     if (this.isRunning && this.currentModel === modelId && this.currentPort === port) {
       return port
@@ -87,20 +186,30 @@ export class LocalLLMModule extends EventEmitter {
       throw new Error('模型文件不存在，请先下载模型')
     }
 
-    const llamaExe = this.getLlamaExePath()
+    const llamaExe = this.getExecutablePath(backend)
+    const threads = options.threads || 4
+    const gpuLayers = options.gpuLayers !== undefined ? options.gpuLayers : (backend === 'cpu' ? 0 : 35)
+
+    const args = [
+      '-m', modelPath,
+      '--port', String(port),
+      '--host', '127.0.0.1',
+      '-c', '4096',
+      '-t', String(threads),
+    ]
+
+    // GPU 层数（0 = CPU only）
+    if (gpuLayers > 0) {
+      args.push('-ngl', String(gpuLayers))
+    }
 
     return new Promise((resolve, reject) => {
       try {
-        console.log(`[LocalLLM] 启动服务: ${llamaExe} -m ${modelPath} --port ${port}`)
+        console.log(`[LocalLLM] 启动服务: ${llamaExe}`, args.join(' '))
 
-        this.process = spawn(llamaExe, [
-          '-m', modelPath,
-          '--port', String(port),
-          '--host', '127.0.0.1',
-          '-c', '4096',
-          '-ngl', '0',  // CPU 模式
-          '--log-disable'
-        ])
+        this.process = spawn(llamaExe, args, {
+          stdio: ['ignore', 'pipe', 'pipe']
+        })
 
         this.process.on('error', (error) => {
           console.error('[LocalLLM] 启动失败:', error)
@@ -115,23 +224,45 @@ export class LocalLLMModule extends EventEmitter {
           this.currentModel = ''
         })
 
-        // 等待服务启动
-        setTimeout(() => {
-          if (this.process && !this.process.killed) {
+        // 等待服务就绪
+        this.waitForReady(port, 15000)
+          .then(() => {
             this.isRunning = true
             this.currentPort = port
             this.currentModel = modelId
-            console.log(`[LocalLLM] 服务已启动，端口: ${port}`)
+            this.currentBackend = backend
+            console.log(`[LocalLLM] 服务已启动，端口: ${port}, 后端: ${backend}`)
             resolve(port)
-          } else {
-            reject(new Error('服务启动超时'))
-          }
-        }, 3000)
+          })
+          .catch(reject)
 
       } catch (error) {
         reject(error)
       }
     })
+  }
+
+  /**
+   * 等待服务就绪
+   */
+  private async waitForReady(port: number, timeout: number): Promise<void> {
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const response = await axios.get(`http://127.0.0.1:${port}/health`, {
+          timeout: 1000
+        })
+        if (response.status === 200) {
+          return
+        }
+      } catch {
+        // 继续等待
+      }
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    throw new Error('服务启动超时')
   }
 
   /**
@@ -151,12 +282,20 @@ export class LocalLLMModule extends EventEmitter {
   /**
    * 获取当前状态
    */
-  getStatus(): { isRunning: boolean; port: number; model: string } {
+  getStatus(): LLMStatus {
     return {
       isRunning: this.isRunning,
       port: this.currentPort,
-      model: this.currentModel
+      model: this.currentModel,
+      backend: this.currentBackend
     }
+  }
+
+  /**
+   * 设置配置
+   */
+  setConfig(config: LocalLLMConfig): void {
+    this.config = config
   }
 
   /**

@@ -1259,6 +1259,30 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.GET_LOCAL_LLM_STATUS, () => {
     return localLLMModule.getStatus()
   })
+
+  ipcMain.handle(IpcChannels.DETECT_LLM_HARDWARE, async () => {
+    return localLLMModule.detectHardware()
+  })
+
+  ipcMain.handle(IpcChannels.DOWNLOAD_LOCAL_LLM_MODEL, async (_, modelId: string) => {
+    return localLLMModule.downloadModel(modelId)
+  })
+
+  ipcMain.handle(IpcChannels.START_LOCAL_LLM, async (_, modelId: string, options?) => {
+    return localLLMModule.startServer(modelId, options)
+  })
+
+  ipcMain.handle(IpcChannels.STOP_LOCAL_LLM, async () => {
+    return localLLMModule.stopServer()
+  })
+
+  ipcMain.handle(IpcChannels.CANCEL_LLM_DOWNLOAD, (_, modelId: string) => {
+    localLLMModule.cancelDownload(modelId)
+  })
+
+  ipcMain.handle(IpcChannels.DELETE_LOCAL_LLM_MODEL, (_, modelId: string) => {
+    return localLLMModule.deleteModel(modelId)
+  })
 }
 
 /**
@@ -1331,6 +1355,12 @@ app.whenReady().then(async () => {
   modelManager.on('migrate-progress', (data) => {
     floatWindow?.webContents.send(IpcChannels.MODELS_MIGRATE_PROGRESS, data)
     settingsWindow?.webContents.send(IpcChannels.MODELS_MIGRATE_PROGRESS, data)
+  })
+
+  // 监听本地 LLM 下载进度
+  localLLMModule.on('download-progress', (data) => {
+    floatWindow?.webContents.send(IpcChannels.LOCAL_LLM_DOWNLOAD_PROGRESS, data)
+    settingsWindow?.webContents.send(IpcChannels.LOCAL_LLM_DOWNLOAD_PROGRESS, data)
   })
 
   // 创建窗口
