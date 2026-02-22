@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState } from '@shared/types'
+import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState, AIProviderConfig, LocalLLMModel } from '@shared/types'
 
 // API 类型定义
 interface BeautifulInputAPI {
@@ -91,6 +91,17 @@ interface BeautifulInputAPI {
   migrateModels: (newPath: string) => Promise<{ success: boolean; error?: string }>
   getDiskSpace: (path?: string) => Promise<DiskSpaceInfo>
   onModelsMigrateProgress: (callback: (event: unknown, data: ModelsMigrateState) => void) => void
+
+  // AI Provider 管理
+  getAIProviders: () => Promise<AIProviderConfig[]>
+  setAIProvider: (providerId: string, modelId?: string) => Promise<void>
+  validateAIApiKey: (providerId: string, apiKey: string) => Promise<boolean>
+  addCustomAIProvider: (config: AIProviderConfig) => Promise<boolean>
+  removeAIProvider: (providerId: string) => Promise<boolean>
+
+  // 本地 LLM
+  getLocalLLMModels: () => Promise<LocalLLMModel[]>
+  getLocalLLMStatus: () => Promise<{ isRunning: boolean; port: number; model: string }>
 
   // 移除监听器
   removeAllListeners: (channel: string) => void
@@ -185,6 +196,17 @@ const api: BeautifulInputAPI = {
   onModelsMigrateProgress: (callback) => {
     ipcRenderer.on(IpcChannels.MODELS_MIGRATE_PROGRESS, callback)
   },
+
+  // AI Provider 管理
+  getAIProviders: () => ipcRenderer.invoke(IpcChannels.GET_AI_PROVIDERS),
+  setAIProvider: (providerId, modelId) => ipcRenderer.invoke(IpcChannels.SET_AI_PROVIDER, providerId, modelId),
+  validateAIApiKey: (providerId, apiKey) => ipcRenderer.invoke(IpcChannels.VALIDATE_AI_API_KEY, providerId, apiKey),
+  addCustomAIProvider: (config) => ipcRenderer.invoke(IpcChannels.ADD_CUSTOM_AI_PROVIDER, config),
+  removeAIProvider: (providerId) => ipcRenderer.invoke(IpcChannels.REMOVE_AI_PROVIDER, providerId),
+
+  // 本地 LLM
+  getLocalLLMModels: () => ipcRenderer.invoke(IpcChannels.GET_LOCAL_LLM_MODELS),
+  getLocalLLMStatus: () => ipcRenderer.invoke(IpcChannels.GET_LOCAL_LLM_STATUS),
 
   // 移除监听器
   removeAllListeners: (channel) => {

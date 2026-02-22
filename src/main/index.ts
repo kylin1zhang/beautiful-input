@@ -14,12 +14,14 @@ import { HistoryModule } from './modules/history/index.js'
 import { HardwareDetector } from './modules/hardware-detector/index.js'
 import { ModelManager } from './modules/model-manager/index.js'
 import { LocalTranscriber } from './modules/local-transcriber/index.js'
+import { providerRegistry } from './modules/ai-processor/registry.js'
+import { localLLMModule } from './modules/local-llm/index.js'
 
 // 服务导入
 import { StoreService } from './services/store.service.js'
 
 // 类型和常量
-import { IpcChannels, UserSettings, LocalModelType, RecordingErrorType, RecordingErrorInfo } from '@shared/types/index.js'
+import { IpcChannels, UserSettings, LocalModelType, RecordingErrorType, RecordingErrorInfo, AIProviderConfig } from '@shared/types/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -671,22 +673,13 @@ async function stopRecording(): Promise<void> {
 
     console.log('[Main] 语音识别结果:', transcriptionResult.text)
 
-    // AI 处理 - 根据用户选择的服务提供商
-    const aiProvider = settings.aiProvider || 'deepseek'
-    const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
-
-    console.log('[Main] AI 服务提供商:', aiProvider)
-    console.log('[Main] 使用的 API Key:', aiProvider === 'qwen' ? 'qwenApiKey' : 'deepseekApiKey')
-    console.log('[Main] API Key 配置状态:', apiKey ? `已配置 (${apiKey.substring(0, 10)}...)` : '未配置')
+    // AI 处理 - 使用新的统一接口
+    console.log('[Main] AI 服务提供商:', settings.aiProvider)
 
     const processedResult = await aiProcessorModule.process(
       transcriptionResult.text,
       'clean',
-      apiKey,
-      settings.toneStyle,
-      undefined,
-      aiProvider,
-      settings.personalDictionary
+      settings
     )
 
     if (!processedResult.success || !processedResult.result) {
@@ -976,22 +969,10 @@ async function stopTranslateRecording(): Promise<void> {
     console.log('[Main] 识别结果:', transcriptionResult.text)
 
     // 第一步：口语化处理（clean）
-    const aiProvider = settings.aiProvider || 'deepseek'
-    const apiKey = aiProvider === 'qwen' ? settings.qwenApiKey : settings.deepseekApiKey
-
-    if (!apiKey) {
-      const providerName = aiProvider === 'qwen' ? '千问' : 'DeepSeek'
-      throw new Error(`请先在设置中配置 ${providerName} API Key`)
-    }
-
     const cleanResult = await aiProcessorModule.process(
       transcriptionResult.text,
       'clean',  // 使用 clean 模式进行口语化处理
-      apiKey,
-      settings.toneStyle,
-      undefined,
-      aiProvider,
-      settings.personalDictionary
+      settings
     )
 
     if (!cleanResult.success || !cleanResult.result) {
@@ -1001,11 +982,11 @@ async function stopTranslateRecording(): Promise<void> {
     console.log('[Main] 口语化处理结果:', cleanResult.result)
 
     // 第二步：翻译处理后的文本
-    const translateResult = await aiProcessorModule.translate(
+    const translateResult = await aiProcessorModule.process(
       cleanResult.result,  // 翻译口语化后的结果
-      settings.translateTargetLanguage || 'en',
-      apiKey,
-      aiProvider
+      'translate',
+      settings,
+      settings.translateTargetLanguage || 'en'
     )
 
     if (!translateResult.success || !translateResult.result) {
@@ -1241,6 +1222,44 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IpcChannels.GET_DISK_SPACE, (_, path?: string) => {
     return modelManager.getDiskSpaceInfo(path)
+  })
+
+  // AI Provider 相关
+  ipcMain.handle(IpcChannels.GET_AI_PROVIDERS, () => {
+    return providerRegistry.getAllConfigs()
+  })
+
+  ipcMain.handle(IpcChannels.SET_AI_PROVIDER, (_, providerId: string, modelId?: string) => {
+    const settings = settingsModule.getSettings()
+    settings.aiProvider = providerId
+    if (modelId) {
+      settings.aiModel = modelId
+    }
+    settingsModule.setSettings(settings)
+  })
+
+  ipcMain.handle(IpcChannels.VALIDATE_AI_API_KEY, async (_, providerId: string, apiKey: string) => {
+    const provider = providerRegistry.getProvider(providerId)
+    if (!provider) return false
+    const config = providerRegistry.getConfig(providerId)
+    return provider.validateApiKey(apiKey, config?.baseUrl)
+  })
+
+  ipcMain.handle(IpcChannels.ADD_CUSTOM_AI_PROVIDER, (_, config: AIProviderConfig) => {
+    return providerRegistry.addCustomProvider(config)
+  })
+
+  ipcMain.handle(IpcChannels.REMOVE_AI_PROVIDER, (_, providerId: string) => {
+    return providerRegistry.removeProvider(providerId)
+  })
+
+  // 本地 LLM 相关
+  ipcMain.handle(IpcChannels.GET_LOCAL_LLM_MODELS, () => {
+    return localLLMModule.getBuiltinModels()
+  })
+
+  ipcMain.handle(IpcChannels.GET_LOCAL_LLM_STATUS, () => {
+    return localLLMModule.getStatus()
   })
 }
 
