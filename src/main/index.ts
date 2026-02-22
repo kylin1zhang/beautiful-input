@@ -401,37 +401,6 @@ async function startRecording(): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500))
     }
 
-    // 检查权限
-    const hasPermission = await recordingModule.checkPermission()
-    if (!hasPermission) {
-      const errorMsg = '请开启"允许桌面应用访问麦克风"'
-      floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-        status: 'error'
-      })
-      floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
-        type: 'PERMISSION_DENIED',
-        message: errorMsg
-      })
-      // 显示系统通知
-      if (Notification.isSupported()) {
-        new Notification({
-          title: 'BeautifulInput 需要麦克风权限',
-          body: '请在设置中开启"允许桌面应用访问麦克风"',
-          icon: getAppIcon()
-        }).show()
-      }
-      // 自动打开麦克风隐私设置
-      console.log('[Main] 正在打开麦克风隐私设置...')
-      shell.openExternal('ms-settings:privacy-microphone')
-
-      setTimeout(() => {
-        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
-          status: 'idle'
-        })
-      }, 3000)
-      return
-    }
-
     // 获取设置（用于自动停止配置）
     const settings = settingsModule.getSettings()
 
@@ -439,12 +408,44 @@ async function startRecording(): Promise<void> {
     const autoStopConfig = settings.autoStopRecording || { enabled: false, vadSilenceDuration: 5000 }
     const enableVAD = autoStopConfig.enabled
 
-    // 开始录音（传入自动停止配置）
-    await recordingModule.startRecording({
-      enableVAD,
-      vadSilenceDuration: autoStopConfig.vadSilenceDuration,
-      vadSilenceThreshold: autoStopConfig.vadSilenceThreshold
-    })
+    // 直接开始录音，不再预先检测权限
+    // 如果权限问题导致录音失败，会在 catch 中处理
+    try {
+      await recordingModule.startRecording({
+        enableVAD,
+        vadSilenceDuration: autoStopConfig.vadSilenceDuration,
+        vadSilenceThreshold: autoStopConfig.vadSilenceThreshold
+      })
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('[Main] 启动录音失败:', errorMessage)
+
+      // 检测是否是权限问题
+      if (errorMessage.includes('麦克风') || errorMessage.includes('设备') || errorMessage.includes('audio')) {
+        const errorMsg = '无法访问麦克风，请检查权限设置'
+        floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+          status: 'error'
+        })
+        floatWindow?.webContents.send(IpcChannels.PROCESSING_ERROR, {
+          type: 'PERMISSION_DENIED',
+          message: errorMsg
+        })
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'BeautifulInput 麦克风问题',
+            body: '请确保已开启"允许桌面应用访问麦克风"',
+            icon: getAppIcon()
+          }).show()
+        }
+        shell.openExternal('ms-settings:privacy-microphone')
+        setTimeout(() => {
+          floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
+            status: 'idle'
+          })
+        }, 3000)
+      }
+      return
+    }
     isRecording = true
     currentRecordingDuration = 0
 
