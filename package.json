@@ -104,6 +104,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources/llama",
+        "to": "llama",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
