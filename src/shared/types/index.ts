@@ -49,12 +49,15 @@ export interface AIProviderConfig {
 export interface LocalLLMModel {
   id: string
   name: string
+  description?: string      // 模型描述
   url: string
   size: string
   sizeBytes: number
   ramRequired: string
+  mirrorUrls?: string[]     // 国内镜像地址
   recommended?: boolean
   downloaded?: boolean
+  gpuRecommended?: boolean  // 是否推荐 GPU
 }
 
 /** 本地 LLM 配置 */
@@ -64,6 +67,31 @@ export interface LocalLLMConfig {
   builtinModelId?: string
   port: number
   autoStart: boolean
+  threads?: number          // CPU 线程数
+  gpuLayers?: number        // GPU 层数（0 = CPU only）
+}
+
+/** 本地 LLM 硬件检测结果 */
+export interface LLMHardwareInfo {
+  platform: 'win32' | 'darwin' | 'linux'
+  hasNvidia: boolean
+  nvidiaGpuName?: string
+  vram?: number             // MB
+  isAppleSilicon: boolean
+  totalMemory: number       // GB
+  recommendedBackend: 'cpu' | 'cuda' | 'metal'
+  recommendedModel: string  // 推荐的模型 ID
+}
+
+/** 本地 LLM 下载进度 */
+export interface LLMDownloadProgress {
+  modelId: string
+  status: 'idle' | 'downloading' | 'completed' | 'error' | 'cancelled'
+  progress: number          // 0-100
+  downloaded: number        // bytes
+  totalSize: number         // bytes
+  speed?: string
+  error?: string
 }
 
 /** AI 处理请求（内部使用） */
@@ -338,7 +366,13 @@ export enum IpcChannels {
   DOWNLOAD_LOCAL_LLM_MODEL = 'download-local-llm-model',
   DELETE_LOCAL_LLM_MODEL = 'delete-local-llm-model',
   GET_LOCAL_LLM_STATUS = 'get-local-llm-status',
-  LOCAL_LLM_DOWNLOAD_PROGRESS = 'local-llm-download-progress'
+  LOCAL_LLM_DOWNLOAD_PROGRESS = 'local-llm-download-progress',
+
+  // 本地 LLM（新增）
+  DETECT_LLM_HARDWARE = 'detect-llm-hardware',
+  START_LOCAL_LLM = 'start-local-llm',
+  STOP_LOCAL_LLM = 'stop-local-llm',
+  CANCEL_LLM_DOWNLOAD = 'cancel-llm-download'
 }
 
 // 支持的语言列表
