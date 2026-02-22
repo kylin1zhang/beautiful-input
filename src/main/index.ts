@@ -90,10 +90,14 @@ function constrainFloatPosition(x: number, y: number, window: BrowserWindow): { 
   return { x: Math.round(newX), y: Math.round(newY) }
 }
 
+// 悬浮球窗口尺寸（需要足够大以显示悬停菜单）
+const FLOAT_WINDOW_WIDTH = 140   // 菜单宽度 + 边距
+const FLOAT_WINDOW_HEIGHT = 160  // 悬浮球 41px + 菜单高度 + 边距
+
 function createFloatWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: FLOAT_BALL_SIZE,
-    height: FLOAT_BALL_SIZE,
+    width: FLOAT_WINDOW_WIDTH,
+    height: FLOAT_WINDOW_HEIGHT,
     frame: false,
     resizable: false,
     alwaysOnTop: true,
@@ -416,6 +420,10 @@ async function startRecording(): Promise<void> {
           icon: getAppIcon()
         }).show()
       }
+      // 自动打开麦克风隐私设置
+      console.log('[Main] 正在打开麦克风隐私设置...')
+      shell.openExternal('ms-settings:privacy-microphone')
+
       setTimeout(() => {
         floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
           status: 'idle'
@@ -1144,6 +1152,39 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.INSTALL_WHISPER, async () => {
     return modelManager.installWhisperFromResources()
   })
+
+  // 模型路径相关
+  ipcMain.handle(IpcChannels.GET_MODELS_PATH, () => {
+    return modelManager.getPathConfig()
+  })
+
+  ipcMain.handle(IpcChannels.SELECT_MODELS_PATH, async () => {
+    return modelManager.selectModelsPath()
+  })
+
+  ipcMain.handle(IpcChannels.MIGRATE_MODELS, async (_, newPath: string) => {
+    const defaultParentPath = modelManager.getDefaultParentPath()
+    const isResetToDefault = newPath === defaultParentPath
+
+    const result = await modelManager.migrateToPath(newPath)
+    if (result.success) {
+      // 更新设置中的路径
+      const currentSettings = settingsModule.getSettings()
+      settingsModule.setSettings({
+        ...currentSettings,
+        localModel: {
+          ...currentSettings.localModel,
+          // 如果是恢复默认，设置为 undefined，否则设置新路径
+          customModelsPath: isResetToDefault ? undefined : newPath
+        }
+      })
+    }
+    return result
+  })
+
+  ipcMain.handle(IpcChannels.GET_DISK_SPACE, (_, path?: string) => {
+    return modelManager.getDiskSpaceInfo(path)
+  })
 }
 
 /**
@@ -1165,6 +1206,18 @@ app.whenReady().then(async () => {
   hardwareDetector = new HardwareDetector()
   modelManager = new ModelManager()
   localTranscriber = new LocalTranscriber()
+
+  // 设置 LocalTranscriber 的 ModelManager 引用
+  localTranscriber.setModelManager(modelManager)
+
+  // 从设置中读取自定义模型路径
+  const settings = settingsModule.getSettings()
+  console.log('[Main] 设置中的 customModelsPath:', settings.localModel?.customModelsPath)
+  if (settings.localModel?.customModelsPath) {
+    modelManager.setCustomPath(settings.localModel.customModelsPath)
+    console.log('[Main] 模型路径:', modelManager.getModelsPath())
+    console.log('[Main] Whisper 路径:', modelManager.getWhisperPath())
+  }
 
   // 监听模型下载进度，转发到渲染进程（同时发送到设置窗口）
   modelManager.on('download-progress', (data) => {
@@ -1191,6 +1244,20 @@ app.whenReady().then(async () => {
     floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
     settingsWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
   })
+  modelManager.on('download-cancelled', (data) => {
+    const progressData = {
+      ...data,
+      status: 'cancelled'
+    }
+    floatWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
+    settingsWindow?.webContents.send(IpcChannels.MODEL_DOWNLOAD_PROGRESS, progressData)
+  })
+
+  // 监听迁移进度
+  modelManager.on('migrate-progress', (data) => {
+    floatWindow?.webContents.send(IpcChannels.MODELS_MIGRATE_PROGRESS, data)
+    settingsWindow?.webContents.send(IpcChannels.MODELS_MIGRATE_PROGRESS, data)
+  })
 
   // 创建窗口
   floatWindow = createFloatWindow()
@@ -1209,7 +1276,6 @@ app.whenReady().then(async () => {
   })
 
   // 注册全局快捷键
-  const settings = settingsModule.getSettings()
   shortcutsModule.registerAll(settings.shortcuts, {
     toggleRecording,
     quickTranslate

@@ -42,7 +42,19 @@
       "Bash(timeout /t:*)",
       "Bash(ping:*)",
       "Bash(\"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-bin\\\\Release\\\\whisper-cli.exe\" --help)",
-      "Bash(\"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-bin\\\\Release\\\\whisper-cli.exe\" -m \"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-models\\\\ggml-base.bin\" -l zh -t 4)"
+      "Bash(\"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-bin\\\\Release\\\\whisper-cli.exe\" -m \"C:\\\\Users\\\\zhangjianfeng\\\\AppData\\\\Roaming\\\\beautiful-input\\\\whisper-models\\\\ggml-base.bin\" -l zh -t 4)",
+      "Bash(timeout:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(while read pid)",
+      "Bash(do taskkill //F //PID $pid)",
+      "Bash(done)",
+      "Bash(more:*)",
+      "Bash(npm run dev:*)",
+      "Skill(glm-plan-usage:usage-query)",
+      "Bash(npx electron-builder:*)",
+      "Bash(cmd:*)",
+      "Bash(\"E:\\\\下载\\\\Kimi_Agent_语音输入工具设计\\\\typeless\\\\release\\\\win-unpacked\\\\BeautifulInput.exe\")"
     ]
   }
 }

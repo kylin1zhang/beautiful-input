@@ -1,5 +1,4 @@
 import { spawn, ChildProcess } from 'child_process'
-import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, unlinkSync, mkdtempSync, rmdirSync } from 'fs'
 import { writeFile } from 'fs/promises'
@@ -12,6 +11,7 @@ import {
 } from '@shared/types/index.js'
 import { WHISPER_EXECUTABLES } from '@shared/constants/index.js'
 import { bufferToWav } from '@shared/utils/index.js'
+import { ModelManager } from '../model-manager/index.js'
 
 // 动态导入 opencc-js
 let toSimplifiedChinese: ((text: string) => string) | null = null
@@ -33,13 +33,17 @@ initConverter()
 
 export class LocalTranscriber extends EventEmitter {
   private whisperProcess: ChildProcess | null = null
-  private modelsDir: string
-  private whisperBinDir: string
+  private modelManager: ModelManager | null = null
 
   constructor() {
     super()
-    this.modelsDir = join(app.getPath('userData'), 'whisper-models')
-    this.whisperBinDir = join(app.getPath('userData'), 'whisper-bin')
+  }
+
+  /**
+   * 设置 ModelManager 引用（用于获取动态路径）
+   */
+  setModelManager(modelManager: ModelManager): void {
+    this.modelManager = modelManager
   }
 
   /**
@@ -47,6 +51,7 @@ export class LocalTranscriber extends EventEmitter {
    */
   private getWhisperExecutable(hw: HardwareInfo): string {
     const platform = hw.platform
+    const whisperBinDir = this.modelManager?.getWhisperPath() || ''
 
     // Windows 优先使用 whisper-cli.exe，其次是 main.exe
     // Linux/macOS 使用 main
@@ -57,8 +62,8 @@ export class LocalTranscriber extends EventEmitter {
     // zip 解压后可能在根目录或 Release 子目录
     for (const exeName of executableNames) {
       const possiblePaths = [
-        join(this.whisperBinDir, exeName),
-        join(this.whisperBinDir, 'Release', exeName)
+        join(whisperBinDir, exeName),
+        join(whisperBinDir, 'Release', exeName)
       ]
 
       for (const path of possiblePaths) {
@@ -70,14 +75,15 @@ export class LocalTranscriber extends EventEmitter {
     }
 
     // 默认返回根目录路径（用于错误提示）
-    return join(this.whisperBinDir, 'main.exe')
+    return join(whisperBinDir, 'main.exe')
   }
 
   /**
    * 获取模型路径
    */
   private getModelPath(modelType: LocalModelType): string {
-    return join(this.modelsDir, `ggml-${modelType}.bin`)
+    const modelsDir = this.modelManager?.getModelsPath() || ''
+    return join(modelsDir, `ggml-${modelType}.bin`)
   }
 
   /**
@@ -102,7 +108,7 @@ export class LocalTranscriber extends EventEmitter {
     if (!existsSync(whisperPath)) {
       return {
         success: false,
-        error: 'Whisper 可执行文件不存在，请重新安装应用'
+        error: 'Whisper 可执行文件不存在，请检查模型存储位置设置'
       }
     }
 

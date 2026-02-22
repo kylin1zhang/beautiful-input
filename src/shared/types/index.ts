@@ -231,7 +231,14 @@ export enum IpcChannels {
 
   // Whisper 可执行文件相关
   CHECK_WHISPER = 'check-whisper',
-  INSTALL_WHISPER = 'install-whisper'
+  INSTALL_WHISPER = 'install-whisper',
+
+  // 模型路径相关
+  GET_MODELS_PATH = 'get-models-path',
+  SELECT_MODELS_PATH = 'select-models-path',
+  MIGRATE_MODELS = 'migrate-models',
+  GET_DISK_SPACE = 'get-disk-space',
+  MODELS_MIGRATE_PROGRESS = 'models-migrate-progress'
 }
 
 // 支持的语言列表
@@ -291,6 +298,7 @@ export interface LocalModelSettings {
   language: string  // 'auto' | 'zh' | 'en' | ...
   threads: number  // CPU 线程数
   useGpu: boolean  // 是否使用 GPU
+  customModelsPath?: string  // 自定义模型存储路径，undefined 表示使用默认路径
 }
 
 // 模型下载状态
@@ -299,5 +307,20 @@ export interface ModelDownloadState {
   status: 'idle' | 'downloading' | 'completed' | 'error'
   progress: number  // 0-100
   speed?: string  // 如 "2.5 MB/s"
+  error?: string
+}
+
+// 磁盘空间信息
+export interface DiskSpaceInfo {
+  total: number  // 总空间（字节）
+  free: number   // 可用空间（字节）
+  used: number   // 已用空间（字节）
+}
+
+// 模型迁移状态
+export interface ModelsMigrateState {
+  status: 'idle' | 'migrating' | 'completed' | 'error'
+  progress: number  // 0-100
+  currentFile?: string
   error?: string
 }

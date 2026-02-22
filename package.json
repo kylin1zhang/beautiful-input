@@ -72,6 +72,30 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources/icon-16.png",
+        "to": "icon-16.png"
+      },
+      {
+        "from": "resources/icon-32.png",
+        "to": "icon-32.png"
+      },
+      {
+        "from": "resources/icon-64.png",
+        "to": "icon-64.png"
+      },
+      {
+        "from": "resources/icon-128.png",
+        "to": "icon-128.png"
+      },
+      {
+        "from": "resources/icon-256.png",
+        "to": "icon-256.png"
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
       }
     ],
     "mac": {

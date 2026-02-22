@@ -16,7 +16,7 @@ import {
   CircleX,
   Clock
 } from 'lucide-react'
-import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType } from '@shared/types/index.js'
+import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType, ModelDownloadState, ModelsMigrateState } from '@shared/types/index.js'
 import './Settings.css'
 
 // 快捷键录制组件
@@ -234,6 +234,11 @@ const Settings: React.FC = () => {
   const [whisperInstalled, setWhisperInstalled] = useState<boolean | null>(null)
   const [whisperInstalling, setWhisperInstalling] = useState(false)
 
+  // 模型路径相关状态
+  const [modelsPathConfig, setModelsPathConfig] = useState<{ current: string; isCustom: boolean; default: string; defaultParent: string } | null>(null)
+  const [migrating, setMigrating] = useState(false)
+  const [migrateProgress, setMigrateProgress] = useState<ModelsMigrateState | null>(null)
+
   // 自动保存定时器引用
   const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null)
 
@@ -246,9 +251,10 @@ const Settings: React.FC = () => {
     loadLocalModels()
     loadHardwareInfo()
     checkWhisperStatus()
+    loadModelsPathConfig()
 
-    // 监听模型下载进度
-    window.electronAPI.onModelDownloadProgress((_, data) => {
+    // 定义进度回调函数
+    const handleDownloadProgress = (_: unknown, data: ModelDownloadState) => {
       if (data.status === 'downloading') {
         setDownloadProgress(data.progress || 0)
       } else if (data.status === 'completed') {
@@ -259,8 +265,39 @@ const Settings: React.FC = () => {
         setDownloadingModel(null)
         setDownloadProgress(0)
         showMessage('error', data.error || '下载失败')
+      } else if (data.status === 'cancelled') {
+        setDownloadingModel(null)
+        setDownloadProgress(0)
+        showMessage('success', '下载已取消')
       }
-    })
+    }
+
+    // 定义迁移进度回调函数
+    const handleMigrateProgress = (_: unknown, data: ModelsMigrateState) => {
+      setMigrateProgress(data)
+      if (data.status === 'completed') {
+        setMigrating(false)
+        loadModelsPathConfig()
+        loadLocalModels()
+        checkWhisperStatus()  // 刷新 Whisper 状态
+        showMessage('success', '模型迁移成功')
+      } else if (data.status === 'error') {
+        setMigrating(false)
+        showMessage('error', data.error || '迁移失败')
+      }
+    }
+
+    // 监听模型下载进度
+    window.electronAPI.onModelDownloadProgress(handleDownloadProgress)
+
+    // 监听迁移进度
+    window.electronAPI.onModelsMigrateProgress(handleMigrateProgress)
+
+    // 清理函数：移除监听器
+    return () => {
+      window.electronAPI.removeAllListeners('model-download-progress')
+      window.electronAPI.removeAllListeners('models-migrate-progress')
+    }
   }, [])
 
   // 检查 Whisper 状态
@@ -289,6 +326,69 @@ const Settings: React.FC = () => {
       showMessage('error', `安装失败: ${(error as Error).message}`)
     } finally {
       setWhisperInstalling(false)
+    }
+  }
+
+  // 加载模型路径配置
+  const loadModelsPathConfig = async () => {
+    try {
+      const config = await window.electronAPI.getModelsPath()
+      setModelsPathConfig(config)
+    } catch (error) {
+      console.error('加载模型路径配置失败:', error)
+    }
+  }
+
+  // 选择新的模型存储路径
+  const handleSelectModelsPath = async () => {
+    if (migrating) return
+
+    try {
+      const newPath = await window.electronAPI.selectModelsPath()
+      if (!newPath) return
+
+      // 确认是否迁移
+      const confirmed = window.confirm(
+        `确定要将模型存储位置更改为以下路径吗？\n\n${newPath}\n\n已下载的模型将自动迁移到新位置。`
+      )
+      if (!confirmed) return
+
+      setMigrating(true)
+      setMigrateProgress({ status: 'migrating', progress: 0, currentFile: '准备迁移...' })
+
+      const result = await window.electronAPI.migrateModels(newPath)
+      if (!result.success) {
+        setMigrating(false)
+        showMessage('error', result.error || '迁移失败')
+      }
+      // 成功的情况由监听器处理
+    } catch (error) {
+      setMigrating(false)
+      showMessage('error', `迁移失败: ${(error as Error).message}`)
+    }
+  }
+
+  // 重置为默认路径
+  const handleResetModelsPath = async () => {
+    if (migrating) return
+
+    // 使用默认父目录，而不是默认模型目录
+    const defaultParentPath = modelsPathConfig?.defaultParent
+    if (!defaultParentPath) return
+
+    const confirmed = window.confirm(
+      `确定要重置为默认路径吗？\n\n${defaultParentPath}\n\n已下载的模型将自动迁移到默认位置。`
+    )
+    if (!confirmed) return
+
+    setMigrating(true)
+    setMigrateProgress({ status: 'migrating', progress: 0, currentFile: '准备迁移...' })
+
+    // 传 null 表示恢复默认
+    const result = await window.electronAPI.migrateModels(defaultParentPath)
+    if (!result.success) {
+      setMigrating(false)
+      showMessage('error', result.error || '迁移失败')
     }
   }
 
@@ -346,6 +446,13 @@ const Settings: React.FC = () => {
 
   // 下载模型
   const handleDownloadModel = async (modelType: LocalModelType) => {
+    // 如果当前有任意模型正在下载，不允许开始新的下载
+    if (downloadingModel) {
+      const currentModelName = localModels.find(m => m.type === downloadingModel)?.name || downloadingModel
+      showMessage('error', `请等待 ${currentModelName} 下载完成`)
+      return
+    }
+
     setDownloadingModel(modelType)
     setDownloadProgress(0)
 
@@ -353,9 +460,15 @@ const Settings: React.FC = () => {
       await window.electronAPI.downloadModel(modelType)
       // 下载完成后刷新模型列表（通过进度回调处理）
     } catch (error) {
-      showMessage('error', `下载失败: ${(error as Error).message}`)
-      setDownloadingModel(null)
-      setDownloadProgress(0)
+      const errorMessage = (error as Error).message
+      // 如果是"已在下载中"的错误，不重置状态（因为下载仍在进行）
+      if (errorMessage.includes('正在下载中')) {
+        showMessage('error', errorMessage)
+      } else {
+        showMessage('error', `下载失败: ${errorMessage}`)
+        setDownloadingModel(null)
+        setDownloadProgress(0)
+      }
     }
   }
 
@@ -886,6 +999,60 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* 模型存储位置 */}
+                  <div className="form-group">
+                    <label>模型存储位置</label>
+                    <div className="models-path-config">
+                      {modelsPathConfig ? (
+                        <>
+                          <div className="current-path">
+                            <span className="path-label">当前路径：</span>
+                            <span className="path-value">{modelsPathConfig.current}</span>
+                            {modelsPathConfig.isCustom && (
+                              <span className="custom-badge">自定义</span>
+                            )}
+                          </div>
+                          {migrating && migrateProgress && (
+                            <div className="migrate-progress">
+                              <div className="progress-bar">
+                                <div
+                                  className="progress-fill"
+                                  style={{ width: `${migrateProgress.progress}%` }}
+                                />
+                              </div>
+                              <span className="progress-text">
+                                {migrateProgress.currentFile || `迁移中 ${migrateProgress.progress}%`}
+                              </span>
+                            </div>
+                          )}
+                          <div className="path-actions">
+                            <button
+                              className="btn btn-secondary"
+                              onClick={handleSelectModelsPath}
+                              disabled={migrating}
+                            >
+                              更改位置
+                            </button>
+                            {modelsPathConfig.isCustom && (
+                              <button
+                                className="btn btn-secondary"
+                                onClick={handleResetModelsPath}
+                                disabled={migrating}
+                              >
+                                恢复默认
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p>正在加载...</p>
+                      )}
+                    </div>
+                    <span className="help-text">
+                      模型和 Whisper 程序将存储在此位置。更改位置时，已有文件将自动迁移。
+                    </span>
+                  </div>
+
                   {/* 硬件检测 */}
                   <div className="form-group">
                     <label>硬件检测</label>
@@ -941,6 +1108,7 @@ const Settings: React.FC = () => {
                             {!model.downloaded && (
                               <>
                                 {downloadingModel === model.type ? (
+                                  // 当前模型正在下载：显示进度条和取消按钮
                                   <div className="download-progress">
                                     <div className="progress-bar">
                                       <div
@@ -956,7 +1124,17 @@ const Settings: React.FC = () => {
                                       取消
                                     </button>
                                   </div>
+                                ) : downloadingModel ? (
+                                  // 其他模型正在下载：显示禁用的下载按钮
+                                  <button
+                                    className="btn btn-small"
+                                    disabled
+                                    title="请等待当前下载完成"
+                                  >
+                                    等待中...
+                                  </button>
                                 ) : (
+                                  // 没有模型在下载：显示正常的下载按钮
                                   <button
                                     className="btn btn-small"
                                     onClick={() => handleDownloadModel(model.type)}

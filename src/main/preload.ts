@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState } from '@shared/types'
+import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState } from '@shared/types'
 
 // API 类型定义
 interface BeautifulInputAPI {
@@ -85,6 +85,13 @@ interface BeautifulInputAPI {
   checkWhisper: () => Promise<boolean>
   installWhisper: () => Promise<boolean>
 
+  // 模型路径相关
+  getModelsPath: () => Promise<{ current: string; isCustom: boolean; default: string; defaultParent: string }>
+  selectModelsPath: () => Promise<string | null>
+  migrateModels: (newPath: string) => Promise<{ success: boolean; error?: string }>
+  getDiskSpace: (path?: string) => Promise<DiskSpaceInfo>
+  onModelsMigrateProgress: (callback: (event: unknown, data: ModelsMigrateState) => void) => void
+
   // 移除监听器
   removeAllListeners: (channel: string) => void
 }
@@ -169,6 +176,15 @@ const api: BeautifulInputAPI = {
   // Whisper 可执行文件相关
   checkWhisper: () => ipcRenderer.invoke(IpcChannels.CHECK_WHISPER),
   installWhisper: () => ipcRenderer.invoke(IpcChannels.INSTALL_WHISPER),
+
+  // 模型路径相关
+  getModelsPath: () => ipcRenderer.invoke(IpcChannels.GET_MODELS_PATH),
+  selectModelsPath: () => ipcRenderer.invoke(IpcChannels.SELECT_MODELS_PATH),
+  migrateModels: (newPath) => ipcRenderer.invoke(IpcChannels.MIGRATE_MODELS, newPath),
+  getDiskSpace: (path) => ipcRenderer.invoke(IpcChannels.GET_DISK_SPACE, path),
+  onModelsMigrateProgress: (callback) => {
+    ipcRenderer.on(IpcChannels.MODELS_MIGRATE_PROGRESS, callback)
+  },
 
   // 移除监听器
   removeAllListeners: (channel) => {

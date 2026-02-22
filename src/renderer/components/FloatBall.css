@@ -18,8 +18,8 @@ body {
   align-items: center;
   justify-content: center;
   position: absolute;
-  left: 0;
-  top: 0;
+  right: 0;
+  bottom: 2px;  /* 留出一点边距，确保完全显示 */
   user-select: none;
   cursor: pointer;
   border: none;
@@ -117,12 +117,11 @@ body {
 .float-ball.processing { background: linear-gradient(135deg, #6366F1, #8B5CF6); }
 .float-ball.error { background: linear-gradient(135deg, #F59E0B, #D97706); }
 
-/* 悬停菜单 */
+/* 悬停菜单 - 显示在悬浮球上方 */
 .hover-menu {
   position: absolute;
-  left: calc(41px + 8px);
-  top: 50%;
-  transform: translateY(-50%);
+  right: 0;
+  bottom: calc(41px + 8px);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -138,11 +137,11 @@ body {
 @keyframes menuIn {
   from {
     opacity: 0;
-    transform: translateY(-50%) scale(0.9);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(-50%) scale(1);
+    transform: translateY(0);
   }
 }
 
