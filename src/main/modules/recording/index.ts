@@ -108,11 +108,71 @@ export class RecordingModule extends EventEmitter {
 
   /**
    * 检查 Windows 权限
+   * 通过尝试录制一小段音频来检测权限
    */
   private async checkWindowsPermission(): Promise<boolean> {
-    // 使用与录音相同的方法检测设备
-    const deviceName = await this.getWindowsMicDevice()
-    return deviceName !== null
+    return new Promise((resolve) => {
+      const deviceName = this.getWindowsMicDevice()
+
+      deviceName.then((name) => {
+        if (!name) {
+          console.log('[Recording] 未找到麦克风设备')
+          resolve(false)
+          return
+        }
+
+        // 尝试实际录制一小段音频来检测权限
+        const ffmpegPath = getFfmpegPath()
+        const testProcess = spawn(ffmpegPath, [
+          '-f', 'dshow',
+          '-i', `audio=${name}`,
+          '-t', '0.5',  // 只录制 0.5 秒
+          '-f', 'null',
+          '-'  // 输出到 null
+        ], {
+          stdio: ['ignore', 'ignore', 'pipe']
+        })
+
+        let stderr = ''
+        testProcess.stderr?.on('data', (data) => {
+          stderr += data.toString()
+        })
+
+        const timeout = setTimeout(() => {
+          testProcess.kill()
+          resolve(false)
+        }, 5000)  // 5 秒超时
+
+        testProcess.on('close', (code) => {
+          clearTimeout(timeout)
+          // 如果成功录制（code=0）或者有音频数据输出，说明权限正常
+          if (code === 0) {
+            console.log('[Recording] 麦克风权限检测通过')
+            resolve(true)
+          } else if (stderr.includes('Could not open audio device') || stderr.includes('Permission denied')) {
+            console.log('[Recording] 麦克风权限被拒绝')
+            resolve(false)
+          } else if (stderr.includes('size=') || stderr.includes('time=')) {
+            // 有输出，说明权限正常
+            console.log('[Recording] 检测到音频输出，权限正常')
+            resolve(true)
+          } else {
+            // 其他情况也认为权限正常（可能是设备问题而非权限问题）
+            console.log('[Recording] 录制退出，code:', code, 'stderr:', stderr.substring(0, 200))
+            resolve(true)
+          }
+        })
+
+        testProcess.on('error', (err) => {
+          clearTimeout(timeout)
+          console.error('[Recording] 测试进程错误:', err)
+          resolve(false)
+        })
+      }).catch((err) => {
+        console.error('[Recording] 获取设备失败:', err)
+        resolve(false)
+      })
+    })
   }
 
   /**
