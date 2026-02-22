@@ -657,12 +657,11 @@ async function stopRecording(): Promise<void> {
     } else {
       // 使用 API
       const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
-      const apiProvider = settings.asrProvider === 'local' ? 'groq' : settings.asrProvider
 
       transcriptionResult = await transcriptionModule.transcribe(
         audioBuffer,
         asrApiKey,
-        apiProvider,
+        settings.asrProvider,  // 'groq' | 'openai'
         settings.personalDictionary
       )
     }
@@ -952,12 +951,11 @@ async function stopTranslateRecording(): Promise<void> {
     } else {
       // 使用 API
       const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
-      const apiProvider = settings.asrProvider === 'local' ? 'groq' : settings.asrProvider
 
       transcriptionResult = await transcriptionModule.transcribe(
         audioBuffer,
         asrApiKey,
-        apiProvider,
+        settings.asrProvider,  // 'groq' | 'openai'
         settings.personalDictionary
       )
     }
