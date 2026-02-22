@@ -404,7 +404,7 @@ export interface LocalModelSettings {
 // 模型下载状态
 export interface ModelDownloadState {
   modelType: LocalModelType
-  status: 'idle' | 'downloading' | 'completed' | 'error'
+  status: 'idle' | 'downloading' | 'completed' | 'error' | 'cancelled'
   progress: number  // 0-100
   speed?: string  // 如 "2.5 MB/s"
   error?: string
