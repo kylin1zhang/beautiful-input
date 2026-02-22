@@ -404,7 +404,7 @@ async function startRecording(): Promise<void> {
     // 检查权限
     const hasPermission = await recordingModule.checkPermission()
     if (!hasPermission) {
-      const errorMsg = '请允许 BeautifulInput 访问麦克风'
+      const errorMsg = '请开启"允许桌面应用访问麦克风"'
       floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
         status: 'error'
       })
@@ -415,8 +415,8 @@ async function startRecording(): Promise<void> {
       // 显示系统通知
       if (Notification.isSupported()) {
         new Notification({
-          title: 'BeautifulInput 错误',
-          body: errorMsg,
+          title: 'BeautifulInput 需要麦克风权限',
+          body: '请在设置中开启"允许桌面应用访问麦克风"',
           icon: getAppIcon()
         }).show()
       }

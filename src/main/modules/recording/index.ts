@@ -4,10 +4,37 @@ import { platform } from 'os'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { app } from 'electron'
 import { VADModule } from '../vad/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+/**
+ * 获取 ffmpeg 可执行文件路径
+ */
+function getFfmpegPath(): string {
+  const os = platform()
+
+  // 开发环境：使用 node_modules 中的 ffmpeg
+  if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
+    // 动态导入 ffmpeg-installer
+    const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path
+    console.log('[Recording] 开发环境 ffmpeg 路径:', ffmpegPath)
+    return ffmpegPath
+  }
+
+  // 生产环境：使用打包的 ffmpeg
+  if (os === 'win32') {
+    const packedPath = join(process.resourcesPath, 'ffmpeg', 'ffmpeg.exe')
+    console.log('[Recording] 生产环境 ffmpeg 路径:', packedPath)
+    return packedPath
+  } else if (os === 'darwin') {
+    return join(process.resourcesPath, 'ffmpeg', 'ffmpeg')
+  } else {
+    return join(process.resourcesPath, 'ffmpeg', 'ffmpeg')
+  }
+}
 
 export interface RecordingOptions {
   sampleRate?: number
@@ -194,7 +221,8 @@ export class RecordingModule extends EventEmitter {
         console.log('[Recording] 使用设备:', deviceName)
 
         // 使用 ffmpeg 录音
-        this.recordingProcess = spawn('ffmpeg', [
+        const ffmpegPath = getFfmpegPath()
+        this.recordingProcess = spawn(ffmpegPath, [
           '-f', 'dshow',
           '-i', `audio=${deviceName}`,
           '-ar', this.options.sampleRate.toString(),
@@ -218,7 +246,8 @@ export class RecordingModule extends EventEmitter {
    */
   private async getWindowsMicDevice(): Promise<string | null> {
     return new Promise((resolve) => {
-      const ffmpeg = spawn('ffmpeg', ['-f', 'dshow', '-list_devices', 'true', '-i', 'dummy'], {
+      const ffmpegPath = getFfmpegPath()
+      const ffmpeg = spawn(ffmpegPath, ['-f', 'dshow', '-list_devices', 'true', '-i', 'dummy'], {
         stdio: ['ignore', 'pipe', 'pipe']
       })
 

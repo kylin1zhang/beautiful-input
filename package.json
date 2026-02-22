@@ -23,6 +23,7 @@
   "dependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron-toolkit/utils": "^4.0.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@nut-tree-fork/nut-js": "^4.2.6",
     "axios": "^1.7.0",
     "electron-store": "^10.0.0",
@@ -96,6 +97,13 @@
       {
         "from": "resources/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "resources/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
