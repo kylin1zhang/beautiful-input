@@ -55,3 +55,13 @@ config.local.json
 
 # Windows special files
 nul
+
+# 大文件 - CUDA/GPU 加速相关（超过 GitHub 100MB 限制）
+# 用户需单独下载，详见 README
+resources/ggml-cuda.dll
+resources/llama-b8123-bin-win-cuda-12.4-x64.zip
+resources/llama-cuda.dll
+resources/llama-server-cuda.exe
+
+# 模型文件（用户自行下载）
+*.gguf

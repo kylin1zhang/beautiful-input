@@ -72,6 +72,24 @@ BeautifulInput 支持本地运行 Whisper 模型进行语音识别，无需联�
 
 本地语音识别需要 Whisper.cpp 可执行文件。从 [Whisper.cpp Releases](https://github.com/ggerganov/whisper.cpp/releases) 下载对应平台的文件，放入 `resources/whisper/` 目录。详见 `resources/whisper/README.md`。
 
+### GPU 加速文件（可选）
+
+如果需要使用 NVIDIA GPU 加速本地语音识别，需要下载以下文件：
+
+| 文件 | 大小 | 用途 | 下载地址 |
+|-----|------|-----|---------|
+| `ggml-cuda.dll` | ~440 MB | CUDA 运行时库 | [llama.cpp Releases](https://github.com/ggerganov/llama.cpp/releases) |
+| `llama-b8123-bin-win-cuda-12.4-x64.zip` | ~210 MB | CUDA 版本二进制 | [llama.cpp Releases](https://github.com/ggerganov/llama.cpp/releases) |
+
+**下载步骤：**
+
+1. 访问 [llama.cpp Releases](https://github.com/ggerganov/llama.cpp/releases) 页面
+2. 找到最新版本，下载 `llama-<version>-bin-win-cuda-<cuda-version>-x64.zip`
+3. 解压后将 `ggml-cuda.dll` 和其他 CUDA 相关文件放入 `resources/` 目录
+4. 重启应用，在设置中启用 GPU 加速
+
+**注意：** 需要 NVIDIA 显卡并安装 [CUDA Toolkit 12.4+](https://developer.nvidia.com/cuda-downloads)
+
 ## 快速开始
 
 ### 安装依赖
