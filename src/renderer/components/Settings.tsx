@@ -16,7 +16,7 @@ import {
   CircleX,
   Clock
 } from 'lucide-react'
-import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType, ModelDownloadState, ModelsMigrateState, LocalLLMModel, LLMHardwareInfo, LLMDownloadProgress } from '@shared/types/index.js'
+import { UserSettings, defaultSettings, SUPPORTED_LANGUAGES, TONE_STYLES, LocalModelInfo, HardwareInfo, LocalModelType, ModelDownloadState, ModelsMigrateState, LocalLLMModel, LLMHardwareInfo, LLMDownloadProgress, AIModelConfig } from '@shared/types/index.js'
 import './Settings.css'
 
 // 快捷键录制组件
@@ -427,6 +427,62 @@ const Settings: React.FC = () => {
     }
   }
 
+  // AI 模型选择相关辅助函数
+  const getModelsForProvider = (providerId: string): AIModelConfig[] => {
+    const modelsMap: Record<string, AIModelConfig[]> = {
+      'deepseek': [
+        { id: 'deepseek-chat', name: 'DeepSeek Chat', isDefault: true },
+        { id: 'deepseek-coder', name: 'DeepSeek Coder' }
+      ],
+      'qwen': [
+        { id: 'qwen-turbo', name: 'Qwen Turbo (快速)', isDefault: true },
+        { id: 'qwen-plus', name: 'Qwen Plus (平衡)' },
+        { id: 'qwen-max', name: 'Qwen Max (效果优先)' }
+      ],
+      'groq': [
+        { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', isDefault: true },
+        { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' }
+      ],
+      'claude': [
+        { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku (快速)', isDefault: true },
+        { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+        { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
+        { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus' }
+      ],
+      'gemini': [
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (快速)', isDefault: true },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+        { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (实验版)' }
+      ],
+      'glm': [
+        { id: 'glm-4-flash', name: 'GLM-4 Flash (免费)', isDefault: true },
+        { id: 'glm-4', name: 'GLM-4' },
+        { id: 'glm-4-plus', name: 'GLM-4 Plus' }
+      ],
+      'local': []
+    }
+    return modelsMap[providerId] || []
+  }
+
+  const getDefaultModel = (providerId: string): string => {
+    const models = getModelsForProvider(providerId)
+    const defaultModel = models.find(m => m.isDefault)
+    return defaultModel?.id || models[0]?.id || ''
+  }
+
+  const getProviderName = (providerId: string): string => {
+    const names: Record<string, string> = {
+      'deepseek': 'DeepSeek',
+      'qwen': '千问',
+      'groq': 'Groq',
+      'claude': 'Claude',
+      'gemini': 'Google Gemini',
+      'glm': '智谱 GLM',
+      'local': '本地 LLM'
+    }
+    return names[providerId] || providerId
+  }
+
   const loadSettings = async () => {
     try {
       const loaded = await window.electronAPI.getSettings()
@@ -783,10 +839,23 @@ const Settings: React.FC = () => {
   ) => {
     setSettings(prev => ({ ...prev, [key]: value }))
 
-    // 如果是 API Key，标记为待保存
+    // 如果是 API Key，标记为待保存（失去焦点时保存）
     if (isApiKeySetting(key)) {
       setPendingApiKeySave(true)
+    } else {
+      // 其他设置立即触发自动保存
+      scheduleAutoSave()
     }
+  }
+
+  // 调度自动保存
+  const scheduleAutoSave = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+    }
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSave()
+    }, 500) // 500ms 延迟后自动保存
   }
 
   // 重置设置
@@ -1582,10 +1651,11 @@ const Settings: React.FC = () => {
                   value={settings.aiProvider}
                   onChange={e => {
                     const newProvider = e.target.value
+                    const defaultModelId = getDefaultModel(newProvider)
                     setSettings(prev => ({
                       ...prev,
                       aiProvider: newProvider,
-                      aiModel: undefined
+                      aiModel: defaultModelId
                     }))
                   }}
                 >
@@ -1601,6 +1671,29 @@ const Settings: React.FC = () => {
                   选择用于 AI 文本处理的服务提供商
                 </span>
               </div>
+
+              {/* AI 模型选择 */}
+              {settings.aiProvider !== 'local' && getModelsForProvider(settings.aiProvider).length > 0 && (
+                <div className="form-group">
+                  <label>
+                    <Settings2 className="label-icon" />
+                    AI 模型
+                  </label>
+                  <select
+                    value={settings.aiModel || getDefaultModel(settings.aiProvider)}
+                    onChange={e => updateSetting('aiModel', e.target.value)}
+                  >
+                    {getModelsForProvider(settings.aiProvider).map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name} {model.isDefault ? '(默认)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="help-text">
+                    选择 {getProviderName(settings.aiProvider)} 使用的具体模型
+                  </span>
+                </div>
+              )}
 
               {/* DeepSeek API Key */}
               {settings.aiProvider === 'deepseek' && (

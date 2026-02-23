@@ -41,7 +41,41 @@ export class StreamingASRModule extends EventEmitter {
       this.router.registerProvider(provider)
     }
 
-    // TODO: 初始化其他提供商
+    // 初始化智谱提供商
+    if (this.config.zhipu?.apiKey) {
+      const provider = createProvider('zhipu', {
+        provider: 'zhipu',
+        zhipu: this.config.zhipu
+      }, callbacks)
+      this.router.registerProvider(provider)
+    }
+
+    // 初始化讯飞提供商
+    if (this.config.xunfei?.appId) {
+      const provider = createProvider('xunfei', {
+        provider: 'xunfei',
+        xunfei: this.config.xunfei
+      }, callbacks)
+      this.router.registerProvider(provider)
+    }
+
+    // 初始化 Groq 提供商
+    if (this.config.groq?.apiKey) {
+      const provider = createProvider('groq', {
+        provider: 'groq',
+        groq: this.config.groq
+      }, callbacks)
+      this.router.registerProvider(provider)
+    }
+
+    // 初始化 FunASR 提供商
+    if (this.config.funasr?.enabled !== false) {
+      const provider = createProvider('funasr', {
+        provider: 'funasr',
+        funasr: this.config.funasr
+      }, callbacks)
+      this.router.registerProvider(provider)
+    }
   }
 
   /**

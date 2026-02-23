@@ -59,6 +59,7 @@ let isRecording = false
 let currentRecordingDuration = 0
 let recordingTimer: NodeJS.Timeout | null = null
 let isTranslateRecording = false  // 标记是否为翻译录音
+let accumulatedStreamingText = ''  // 流式 ASR 累积的文本
 
 /**
  * 分析录音错误，返回详细的错误信息
@@ -524,6 +525,54 @@ async function startRecording(): Promise<void> {
     }
     isRecording = true
     currentRecordingDuration = 0
+    accumulatedStreamingText = ''  // 重置流式 ASR 累积文本
+
+    // 判断是否使用流式 ASR
+    const useStreamingASR = settings.asrMode === 'streaming'
+
+    if (useStreamingASR && settings.streamingASR?.provider) {
+      try {
+        if (!streamingASR) {
+          streamingASR = new StreamingASRModule({
+            enabled: true,
+            provider: settings.streamingASR.provider,
+            mode: settings.streamingASR.mode || 'cloud-first',
+            aliyun: settings.streamingASR.aliyun,
+            zhipu: settings.streamingASR.zhipu,
+            xunfei: settings.streamingASR.xunfei,
+            groq: settings.streamingASR.groq,
+            funasr: settings.streamingASR.funasr
+          }, termManager)
+
+          streamingASR.on('result', (result: StreamingASRResult) => {
+            accumulatedStreamingText = result.text
+            previewWindow.updateText(result.text)
+            floatWindow?.webContents.send(IpcChannels.STREAMING_ASR_TEXT, result)
+          })
+
+          streamingASR.on('error', (error: StreamingASRError) => {
+            console.error('[Main] 流式 ASR 错误:', error)
+            floatWindow?.webContents.send(IpcChannels.STREAMING_ASR_ERROR, error)
+          })
+        }
+
+        await streamingASR.startStreaming(settings.streamingASR.provider)
+
+        recordingModule.setStreamingCallback((chunk: Buffer) => {
+          streamingASR?.sendAudioChunk({
+            data: chunk,
+            timestamp: Date.now()
+          })
+        }, 600)
+
+        const floatPosition = storeService.getFloatPosition()
+        previewWindow.show(floatPosition ?? undefined)
+
+        console.log('[Main] 流式 ASR 已启动')
+      } catch (error) {
+        console.error('[Main] 流式 ASR 启动失败:', error)
+      }
+    }
 
     // 监听自动停止事件（先移除旧的监听器，避免重复注册）
     recordingModule.removeAllListeners('auto-stop')
@@ -594,6 +643,22 @@ async function stopRecording(): Promise<void> {
       recordingTimer = null
     }
 
+    // 获取设置并判断是否使用流式 ASR
+    const settings = settingsModule.getSettings()
+    const useStreamingASR = settings.asrMode === 'streaming'
+    let transcriptionText = ''
+
+    // 处理流式 ASR 结果
+    if (useStreamingASR && streamingASR) {
+      await streamingASR.stopStreaming()
+      transcriptionText = accumulatedStreamingText
+
+      // 延迟隐藏预览窗口
+      setTimeout(() => {
+        previewWindow.hide(true)
+      }, 500)
+    }
+
     // 更新状态为处理中
     floatWindow?.webContents.send(IpcChannels.RECORDING_STATUS_CHANGED, {
       status: 'processing'
@@ -602,6 +667,9 @@ async function stopRecording(): Promise<void> {
     // 停止录音并获取音频数据
     const audioBuffer = await recordingModule.stopRecording()
     isRecording = false
+
+    // 清除流式回调
+    recordingModule.setStreamingCallback(null)
 
     // 检查录音时长
     if (currentRecordingDuration < 1) {
@@ -632,9 +700,9 @@ async function stopRecording(): Promise<void> {
     console.log('[Main] 停止录音，开始处理...')
 
     // 语音识别
-    const settings = settingsModule.getSettings()
     console.log('[Main] 当前设置:', JSON.stringify({
       asrProvider: settings.asrProvider,
+      asrMode: settings.asrMode,
       localModel: settings.localModel,
       groqApiKey: settings.groqApiKey ? `已配置 (${settings.groqApiKey.substring(0, 10)}...)` : '未配置',
       openaiApiKey: settings.openaiApiKey ? `已配置 (${settings.openaiApiKey.substring(0, 10)}...)` : '未配置',
@@ -645,48 +713,53 @@ async function stopRecording(): Promise<void> {
 
     let transcriptionResult
 
-    // 根据选择的 ASR 提供商进行语音识别
-    if (settings.asrProvider === 'local') {
-      // 使用本地模型
-      console.log('[Main] 使用本地模型进行语音识别')
+    // 如果流式 ASR 结果为空，回退到传统转录
+    if (!transcriptionText) {
+      // 根据选择的 ASR 提供商进行语音识别
+      if (settings.asrProvider === 'local') {
+        // 使用本地模型
+        console.log('[Main] 使用本地模型进行语音识别')
 
-      // 确保有硬件信息
-      if (!settings.hardwareInfo) {
-        settings.hardwareInfo = await hardwareDetector.detect()
-        settingsModule.setSettings({ hardwareInfo: settings.hardwareInfo })
+        // 确保有硬件信息
+        if (!settings.hardwareInfo) {
+          settings.hardwareInfo = await hardwareDetector.detect()
+          settingsModule.setSettings({ hardwareInfo: settings.hardwareInfo })
+        }
+
+        transcriptionResult = await localTranscriber.transcribe(
+          audioBuffer,
+          settings.localModel.selectedModel,
+          settings.hardwareInfo,
+          settings.localModel.language,
+          settings.localModel.threads,
+          settings.personalDictionary  // 传递个性化字典
+        )
+      } else {
+        // 使用 API
+        const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
+
+        transcriptionResult = await transcriptionModule.transcribe(
+          audioBuffer,
+          asrApiKey,
+          settings.asrProvider,  // 'groq' | 'openai'
+          settings.personalDictionary
+        )
       }
 
-      transcriptionResult = await localTranscriber.transcribe(
-        audioBuffer,
-        settings.localModel.selectedModel,
-        settings.hardwareInfo,
-        settings.localModel.language,
-        settings.localModel.threads,
-        settings.personalDictionary  // 传递个性化字典
-      )
-    } else {
-      // 使用 API
-      const asrApiKey = settings.asrProvider === 'openai' ? settings.openaiApiKey : settings.groqApiKey
+      if (!transcriptionResult.success || !transcriptionResult.text) {
+        throw new Error(transcriptionResult.error || '语音识别失败')
+      }
 
-      transcriptionResult = await transcriptionModule.transcribe(
-        audioBuffer,
-        asrApiKey,
-        settings.asrProvider,  // 'groq' | 'openai'
-        settings.personalDictionary
-      )
+      transcriptionText = transcriptionResult.text
     }
 
-    if (!transcriptionResult.success || !transcriptionResult.text) {
-      throw new Error(transcriptionResult.error || '语音识别失败')
-    }
-
-    console.log('[Main] 语音识别结果:', transcriptionResult.text)
+    console.log('[Main] 语音识别结果:', transcriptionText)
 
     // AI 处理 - 使用新的统一接口
     console.log('[Main] AI 服务提供商:', settings.aiProvider)
 
     const processedResult = await aiProcessorModule.process(
-      transcriptionResult.text,
+      transcriptionText,
       'clean',
       settings
     )
@@ -722,7 +795,7 @@ async function stopRecording(): Promise<void> {
     // 保存到历史记录
     const activeApp = await inputSimulatorModule.getActiveApplication()
     await historyModule.addHistory({
-      originalText: transcriptionResult.text,
+      originalText: transcriptionText,
       processedText: processedResult.result,
       timestamp: Date.now(),
       appName: activeApp,
@@ -731,7 +804,7 @@ async function stopRecording(): Promise<void> {
 
     // 发送处理结果
     floatWindow?.webContents.send(IpcChannels.PROCESSING_RESULT, {
-      originalText: transcriptionResult.text,
+      originalText: transcriptionText,
       processedText: processedResult.result,
       timestamp: Date.now(),
       appName: activeApp,

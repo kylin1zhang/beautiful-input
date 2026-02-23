@@ -521,6 +521,9 @@ export interface StreamingASRConfig {
     apiKey?: string
     apiSecret?: string
   }
+  groq?: {
+    apiKey?: string
+  }
   // 本地 FunASR 配置
   funasr?: {
     enabled: boolean
