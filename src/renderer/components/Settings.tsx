@@ -1046,505 +1046,519 @@ const Settings: React.FC = () => {
                 语音识别服务
               </h3>
               <p className="module-description">
-                用于将语音转换为文本，支持多种识别引擎
+                用于将语音转换为文本
               </p>
 
-              {/* 语音服务提供商选择 */}
+              {/* 语音识别模式选择 */}
               <div className="form-group">
                 <label>
                   <Key className="label-icon" />
-                  语音服务提供商
+                  语音识别模式
                 </label>
                 <select
-                  value={settings.asrProvider}
-                  onChange={e => updateSetting('asrProvider', e.target.value as 'groq' | 'openai' | 'local')}
+                  value={settings.asrMode || 'normal'}
+                  onChange={e => updateSetting('asrMode', e.target.value as 'normal' | 'streaming')}
                 >
-                  <option value="groq">Groq (Whisper Large V3)</option>
-                  <option value="openai">OpenAI (Whisper)</option>
-                  <option value="local">本地模型 (离线)</option>
+                  <option value="normal">普通模式（录音结束后识别）</option>
+                  <option value="streaming">流式模式（边说边显示）</option>
                 </select>
                 <span className="help-text">
-                  选择用于语音识别的服务提供商
+                  {settings.asrMode === 'streaming'
+                    ? '流式模式：实时显示识别结果，支持边说边显示'
+                    : '普通模式：录音结束后统一识别，准确率更高'}
                 </span>
               </div>
 
-              {/* Groq API Key */}
-              {settings.asrProvider === 'groq' && (
-                <div className="form-group">
-                  <label>
-                    <Key className="label-icon" />
-                    Groq API Key
-                    <span className="required">*</span>
-                  </label>
-                  <div className="input-group">
-                    <input
-                      type={showGroqKey ? 'text' : 'password'}
-                      value={settings.groqApiKey}
-                      onChange={e => updateSetting('groqApiKey', e.target.value)}
-                      onBlur={() => handleApiKeyBlur('groqApiKey', settings.groqApiKey)}
-                      placeholder="输入 Groq API Key"
-                    />
-                    <button
-                      className="input-action"
-                      onClick={() => setShowGroqKey(!showGroqKey)}
-                    >
-                      {showGroqKey ? <EyeOff /> : <Eye />}
-                    </button>
-                    <button
-                      className="input-action test-btn"
-                      onClick={() => testApiKey('groq')}
-                    >
-                      测试
-                    </button>
-                  </div>
-                  <span className="help-text">
-                    使用 Groq Whisper Large V3 模型进行语音识别，<a href="https://console.groq.com" target="_blank" rel="noreferrer">获取 API Key</a>
-                  </span>
-                </div>
-              )}
-
-              {/* OpenAI API Key */}
-              {settings.asrProvider === 'openai' && (
-                <div className="form-group">
-                  <label>
-                    <Key className="label-icon" />
-                    OpenAI API Key
-                    <span className="required">*</span>
-                  </label>
-                  <div className="input-group">
-                    <input
-                      type={showOpenaiKey ? 'text' : 'password'}
-                      value={settings.openaiApiKey}
-                      onChange={e => updateSetting('openaiApiKey', e.target.value)}
-                      onBlur={() => handleApiKeyBlur('openaiApiKey', settings.openaiApiKey)}
-                      placeholder="输入 OpenAI API Key"
-                    />
-                    <button
-                      className="input-action"
-                      onClick={() => setShowOpenaiKey(!showOpenaiKey)}
-                    >
-                      {showOpenaiKey ? <EyeOff /> : <Eye />}
-                    </button>
-                    <button
-                      className="input-action test-btn"
-                      onClick={() => testApiKey('openai')}
-                    >
-                      测试
-                    </button>
-                  </div>
-                  <span className="help-text">
-                    使用 OpenAI Whisper 模型进行语音识别，<a href="https://platform.openai.com" target="_blank" rel="noreferrer">获取 API Key</a>
-                  </span>
-                </div>
-              )}
-
-              {/* 本地模型配置 */}
-              {settings.asrProvider === 'local' && (
-                <div className="local-model-section">
-                  <h4>本地模型设置</h4>
-
-                  {/* Whisper 程序状态 */}
+              {/* ========== 普通模式配置 ========== */}
+              {settings.asrMode !== 'streaming' && (
+                <>
+                  {/* 语音服务提供商选择 */}
                   <div className="form-group">
-                    <label>Whisper 程序</label>
-                    <div className="whisper-status">
-                      {whisperInstalled === null ? (
-                        <p className="status-checking">正在检查...</p>
-                      ) : whisperInstalled ? (
-                        <p className="status-installed">
-                          <span className="status-icon">✓</span>
-                          Whisper 已安装，可以使用本地语音识别
-                        </p>
-                      ) : (
-                        <div>
-                          <p className="status-not-installed">
-                            <span className="status-icon">!</span>
-                            Whisper 未安装
-                          </p>
-                          <button
-                            className="btn btn-primary"
-                            onClick={handleInstallWhisper}
-                            disabled={whisperInstalling}
-                            style={{ marginTop: '8px' }}
-                          >
-                            {whisperInstalling ? '正在安装...' : '安装 Whisper'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 模型存储位置（统一管理所有模型） */}
-                  <div className="form-group">
-                    <label>所有模型存储位置</label>
-                    <div className="models-path-config">
-                      {modelsPathConfig ? (
-                        <>
-                          <div className="current-path">
-                            <span className="path-label">当前路径：</span>
-                            <span className="path-value">{modelsPathConfig.current}</span>
-                            {modelsPathConfig.isCustom && (
-                              <span className="custom-badge">自定义</span>
-                            )}
-                          </div>
-                          {migrating && migrateProgress && (
-                            <div className="migrate-progress">
-                              <div className="progress-bar">
-                                <div
-                                  className="progress-fill"
-                                  style={{ width: `${migrateProgress.progress}%` }}
-                                />
-                              </div>
-                              <span className="progress-text">
-                                {migrateProgress.currentFile || `迁移中 ${migrateProgress.progress}%`}
-                              </span>
-                            </div>
-                          )}
-                          <div className="path-actions">
-                            <button
-                              className="btn btn-secondary"
-                              onClick={handleSelectModelsPath}
-                              disabled={migrating}
-                            >
-                              更改位置
-                            </button>
-                            {modelsPathConfig.isCustom && (
-                              <button
-                                className="btn btn-secondary"
-                                onClick={handleResetModelsPath}
-                                disabled={migrating}
-                              >
-                                恢复默认
-                              </button>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <p>正在加载...</p>
-                      )}
-                    </div>
-                    <span className="help-text">
-                      此位置用于存储所有模型文件，包括：语音识别模型 (Whisper)、大语言模型 (LLM) 等。更改位置时，已有文件将自动迁移到新位置。
-                    </span>
-                  </div>
-
-                  {/* 硬件检测 */}
-                  <div className="form-group">
-                    <label>硬件检测</label>
-                    <div className="hardware-info">
-                      {hardwareInfo ? (
-                        <>
-                          <p>
-                            <strong>检测结果：</strong>
-                            {hardwareInfo.hasNvidia && hardwareInfo.nvidiaGpuName
-                              ? `${hardwareInfo.nvidiaGpuName} (${hardwareInfo.vram}MB)`
-                              : hardwareInfo.isAppleSilicon
-                                ? 'Apple Silicon'
-                                : '仅 CPU'}
-                          </p>
-                          <p>
-                            <strong>推荐模型：</strong>
-                            {hardwareInfo.recommendedModel}
-                            <span className="recommend-reason">({hardwareInfo.recommendedReason})</span>
-                          </p>
-                        </>
-                      ) : (
-                        <p>尚未检测硬件</p>
-                      )}
-                      <button className="btn btn-secondary" onClick={detectHardware}>
-                        重新检测
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 模型列表 */}
-                  <div className="form-group">
-                    <label>模型选择</label>
-                    <div className="model-list">
-                      {localModels.map(model => (
-                        <div key={model.type} className="model-item">
-                          <label className="model-radio">
-                            <input
-                              type="radio"
-                              name="localModel"
-                              value={model.type}
-                              checked={settings.localModel?.selectedModel === model.type}
-                              onChange={() => updateSetting('localModel', {
-                                ...settings.localModel,
-                                selectedModel: model.type
-                              })}
-                              disabled={!model.downloaded}
-                            />
-                            <span className="model-name">{model.name}</span>
-                            <span className="model-size">{model.sizeDisplay}</span>
-                            {model.downloaded && <span className="model-status downloaded">✓ 已下载</span>}
-                          </label>
-                          <div className="model-actions">
-                            {!model.downloaded && (
-                              <>
-                                {downloadingModel === model.type ? (
-                                  // 当前模型正在下载：显示进度条和取消按钮
-                                  <div className="download-progress">
-                                    <div className="progress-bar">
-                                      <div
-                                        className="progress-fill"
-                                        style={{ width: `${downloadProgress}%` }}
-                                      />
-                                    </div>
-                                    <span>{downloadProgress}%</span>
-                                    <button
-                                      className="btn btn-small btn-danger"
-                                      onClick={() => handleCancelDownload(model.type)}
-                                    >
-                                      取消
-                                    </button>
-                                  </div>
-                                ) : downloadingModel ? (
-                                  // 其他模型正在下载：显示禁用的下载按钮
-                                  <button
-                                    className="btn btn-small"
-                                    disabled
-                                    title="请等待当前下载完成"
-                                  >
-                                    等待中...
-                                  </button>
-                                ) : (
-                                  // 没有模型在下载：显示正常的下载按钮
-                                  <button
-                                    className="btn btn-small"
-                                    onClick={() => handleDownloadModel(model.type)}
-                                  >
-                                    下载
-                                  </button>
-                                )}
-                              </>
-                            )}
-                            {model.downloaded && (
-                              <button
-                                className="btn btn-small btn-danger"
-                                onClick={() => handleDeleteModel(model.type)}
-                              >
-                                删除
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 语言设置 */}
-                  <div className="form-group">
-                    <label>语言</label>
+                    <label>语音识别提供商</label>
                     <select
-                      value={settings.localModel?.language || 'auto'}
-                      onChange={e => updateSetting('localModel', {
-                        ...settings.localModel,
-                        language: e.target.value
-                      })}
+                      value={settings.asrProvider}
+                      onChange={e => updateSetting('asrProvider', e.target.value as 'groq' | 'openai' | 'local')}
                     >
-                      <option value="auto">自动检测</option>
-                      <option value="zh">中文</option>
-                      <option value="en">英语</option>
-                      <option value="ja">日语</option>
-                      <option value="ko">韩语</option>
+                      <option value="groq">Groq (Whisper Large V3)</option>
+                      <option value="openai">OpenAI (Whisper)</option>
+                      <option value="local">本地模型 (离线)</option>
                     </select>
                   </div>
-                </div>
-              )}
 
-              {/* 流式语音识别（实验性） */}
-              <div className="form-group" style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
-                <label>
-                  <Volume2 className="label-icon" />
-                  流式语音识别
-                  <span className="badge" style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: 'var(--warning-color)', color: '#fff', borderRadius: '4px' }}>实验性</span>
-                </label>
-                <p className="help-text" style={{ marginBottom: '10px' }}>
-                  实时显示识别结果，支持边说边显示。
-                </p>
-                <select
-                  value={settings.streamingASR?.provider || 'groq'}
-                  onChange={e => updateSetting('streamingASR', {
-                    ...settings.streamingASR,
-                    enabled: true,
-                    provider: e.target.value as any,
-                    mode: 'cloud-first'
-                  })}
-                >
-                  <option value="aliyun">阿里云 Paraformer</option>
-                  <option value="xunfei">讯飞语音听写</option>
-                  <option value="zhipu">智谱 GLM-4-Voice</option>
-                  <option value="groq">Groq Whisper（复用上方 Groq API Key）</option>
-                  <option value="funasr">FunASR 本地 (离线)</option>
-                </select>
-              </div>
+                  {/* Groq API Key */}
+                  {settings.asrProvider === 'groq' && (
+                    <div className="form-group">
+                      <label>
+                        <Key className="label-icon" />
+                        Groq API Key
+                        <span className="required">*</span>
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type={showGroqKey ? 'text' : 'password'}
+                          value={settings.groqApiKey}
+                          onChange={e => updateSetting('groqApiKey', e.target.value)}
+                          onBlur={() => handleApiKeyBlur('groqApiKey', settings.groqApiKey)}
+                          placeholder="输入 Groq API Key"
+                        />
+                        <button
+                          className="input-action"
+                          onClick={() => setShowGroqKey(!showGroqKey)}
+                        >
+                          {showGroqKey ? <EyeOff /> : <Eye />}
+                        </button>
+                        <button
+                          className="input-action test-btn"
+                          onClick={() => testApiKey('groq')}
+                        >
+                          测试
+                        </button>
+                      </div>
+                      <span className="help-text">
+                        使用 Groq Whisper Large V3 模型进行语音识别，<a href="https://console.groq.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                      </span>
+                    </div>
+                  )}
 
-              {/* 阿里云 Paraformer 配置 */}
-              {settings.streamingASR?.provider === 'aliyun' && (
-                <>
-                  <div className="form-group">
-                    <label>阿里云 AccessKey ID</label>
-                    <input
-                      type="text"
-                      value={settings.streamingASR?.aliyun?.accessKeyId || ''}
-                      onChange={e => setSettings(prev => ({
-                        ...prev,
-                        streamingASR: {
-                          ...prev.streamingASR!,
-                          aliyun: {
-                            ...prev.streamingASR?.aliyun,
-                            accessKeyId: e.target.value
-                          }
-                        }
-                      }))}
-                      placeholder="输入 AccessKey ID"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>阿里云 AccessKey Secret</label>
-                    <input
-                      type="password"
-                      value={settings.streamingASR?.aliyun?.accessKeySecret || ''}
-                      onChange={e => setSettings(prev => ({
-                        ...prev,
-                        streamingASR: {
-                          ...prev.streamingASR!,
-                          aliyun: {
-                            ...prev.streamingASR?.aliyun,
-                            accessKeySecret: e.target.value
-                          }
-                        }
-                      }))}
-                      placeholder="输入 AccessKey Secret"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>阿里云 AppKey</label>
-                    <input
-                      type="text"
-                      value={settings.streamingASR?.aliyun?.appKey || ''}
-                      onChange={e => setSettings(prev => ({
-                        ...prev,
-                        streamingASR: {
-                          ...prev.streamingASR!,
-                          aliyun: {
-                            ...prev.streamingASR?.aliyun,
-                            appKey: e.target.value
-                          }
-                        }
-                      }))}
-                      placeholder="输入智能语音服务的 AppKey"
-                    />
-                    <span className="help-text">
-                      <a href="https://nls-portal.console.aliyun.com/" target="_blank" rel="noreferrer">阿里云智能语音服务控制台</a>
-                    </span>
-                  </div>
+                  {/* OpenAI API Key */}
+                  {settings.asrProvider === 'openai' && (
+                    <div className="form-group">
+                      <label>
+                        <Key className="label-icon" />
+                        OpenAI API Key
+                        <span className="required">*</span>
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type={showOpenaiKey ? 'text' : 'password'}
+                          value={settings.openaiApiKey}
+                          onChange={e => updateSetting('openaiApiKey', e.target.value)}
+                          onBlur={() => handleApiKeyBlur('openaiApiKey', settings.openaiApiKey)}
+                          placeholder="输入 OpenAI API Key"
+                        />
+                        <button
+                          className="input-action"
+                          onClick={() => setShowOpenaiKey(!showOpenaiKey)}
+                        >
+                          {showOpenaiKey ? <EyeOff /> : <Eye />}
+                        </button>
+                        <button
+                          className="input-action test-btn"
+                          onClick={() => testApiKey('openai')}
+                        >
+                          测试
+                        </button>
+                      </div>
+                      <span className="help-text">
+                        使用 OpenAI Whisper 模型进行语音识别，<a href="https://platform.openai.com" target="_blank" rel="noreferrer">获取 API Key</a>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 本地模型配置 */}
+                  {settings.asrProvider === 'local' && (
+                    <div className="local-model-section">
+                      <h4>本地模型设置</h4>
+
+                      {/* Whisper 程序状态 */}
+                      <div className="form-group">
+                        <label>Whisper 程序</label>
+                        <div className="whisper-status">
+                          {whisperInstalled === null ? (
+                            <p className="status-checking">正在检查...</p>
+                          ) : whisperInstalled ? (
+                            <p className="status-installed">
+                              <span className="status-icon">✓</span>
+                              Whisper 已安装，可以使用本地语音识别
+                            </p>
+                          ) : (
+                            <div>
+                              <p className="status-not-installed">
+                                <span className="status-icon">!</span>
+                                Whisper 未安装
+                              </p>
+                              <button
+                                className="btn btn-primary"
+                                onClick={handleInstallWhisper}
+                                disabled={whisperInstalling}
+                                style={{ marginTop: '8px' }}
+                              >
+                                {whisperInstalling ? '正在安装...' : '安装 Whisper'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 模型存储位置 */}
+                      <div className="form-group">
+                        <label>所有模型存储位置</label>
+                        <div className="models-path-config">
+                          {modelsPathConfig ? (
+                            <>
+                              <div className="current-path">
+                                <span className="path-label">当前路径：</span>
+                                <span className="path-value">{modelsPathConfig.current}</span>
+                                {modelsPathConfig.isCustom && (
+                                  <span className="custom-badge">自定义</span>
+                                )}
+                              </div>
+                              {migrating && migrateProgress && (
+                                <div className="migrate-progress">
+                                  <div className="progress-bar">
+                                    <div
+                                      className="progress-fill"
+                                      style={{ width: `${migrateProgress.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="progress-text">
+                                    {migrateProgress.currentFile || `迁移中 ${migrateProgress.progress}%`}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="path-actions">
+                                <button
+                                  className="btn btn-secondary"
+                                  onClick={handleSelectModelsPath}
+                                  disabled={migrating}
+                                >
+                                  更改位置
+                                </button>
+                                {modelsPathConfig.isCustom && (
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={handleResetModelsPath}
+                                    disabled={migrating}
+                                  >
+                                    恢复默认
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <p>正在加载...</p>
+                          )}
+                        </div>
+                        <span className="help-text">
+                          此位置用于存储所有模型文件，包括：语音识别模型 (Whisper)、大语言模型 (LLM) 等。
+                        </span>
+                      </div>
+
+                      {/* 硬件检测 */}
+                      <div className="form-group">
+                        <label>硬件检测</label>
+                        <div className="hardware-info">
+                          {hardwareInfo ? (
+                            <>
+                              <p>
+                                <strong>检测结果：</strong>
+                                {hardwareInfo.hasNvidia && hardwareInfo.nvidiaGpuName
+                                  ? `${hardwareInfo.nvidiaGpuName} (${hardwareInfo.vram}MB)`
+                                  : hardwareInfo.isAppleSilicon
+                                    ? 'Apple Silicon'
+                                    : '仅 CPU'}
+                              </p>
+                              <p>
+                                <strong>推荐模型：</strong>
+                                {hardwareInfo.recommendedModel}
+                                <span className="recommend-reason">({hardwareInfo.recommendedReason})</span>
+                              </p>
+                            </>
+                          ) : (
+                            <p>尚未检测硬件</p>
+                          )}
+                          <button className="btn btn-secondary" onClick={detectHardware}>
+                            重新检测
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 模型列表 */}
+                      <div className="form-group">
+                        <label>模型选择</label>
+                        <div className="model-list">
+                          {localModels.map(model => (
+                            <div key={model.type} className="model-item">
+                              <label className="model-radio">
+                                <input
+                                  type="radio"
+                                  name="localModel"
+                                  value={model.type}
+                                  checked={settings.localModel?.selectedModel === model.type}
+                                  onChange={() => updateSetting('localModel', {
+                                    ...settings.localModel,
+                                    selectedModel: model.type
+                                  })}
+                                  disabled={!model.downloaded}
+                                />
+                                <span className="model-name">{model.name}</span>
+                                <span className="model-size">{model.sizeDisplay}</span>
+                                {model.downloaded && <span className="model-status downloaded">✓ 已下载</span>}
+                              </label>
+                              <div className="model-actions">
+                                {!model.downloaded && (
+                                  <>
+                                    {downloadingModel === model.type ? (
+                                      <div className="download-progress">
+                                        <div className="progress-bar">
+                                          <div
+                                            className="progress-fill"
+                                            style={{ width: `${model.downloadProgress || 0}%` }}
+                                          />
+                                        </div>
+                                        <span className="progress-text">
+                                          {model.downloadProgress || 0}%
+                                        </span>
+                                        <button
+                                          className="btn btn-small"
+                                          onClick={() => handleCancelDownload(model.type)}
+                                        >
+                                          取消
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        className="btn btn-small"
+                                        onClick={() => handleDownloadModel(model.type)}
+                                      >
+                                        下载
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 语言设置 */}
+                      <div className="form-group">
+                        <label>语言</label>
+                        <select
+                          value={settings.localModel?.language || 'auto'}
+                          onChange={e => updateSetting('localModel', {
+                            ...settings.localModel,
+                            language: e.target.value
+                          })}
+                        >
+                          <option value="auto">自动检测</option>
+                          <option value="zh">中文</option>
+                          <option value="en">英语</option>
+                          <option value="ja">日语</option>
+                          <option value="ko">韩语</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
-              {/* 讯飞语音听写配置 */}
-              {settings.streamingASR?.provider === 'xunfei' && (
+              {/* ========== 流式模式配置 ========== */}
+              {settings.asrMode === 'streaming' && (
                 <>
+                  <div className="form-group" style={{
+                    padding: '15px',
+                    background: 'var(--warning-bg, rgba(255, 193, 7, 0.1))',
+                    borderRadius: '8px',
+                    marginBottom: '15px'
+                  }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      <strong>流式模式</strong>：实时显示识别结果，边说边显示文字。适合需要即时反馈的场景。
+                    </p>
+                  </div>
+
+                  {/* 流式 ASR 提供商选择 */}
                   <div className="form-group">
-                    <label>讯飞 AppID</label>
-                    <input
-                      type="text"
-                      value={settings.streamingASR?.xunfei?.appId || ''}
+                    <label>流式语音识别提供商</label>
+                    <select
+                      value={settings.streamingASR?.provider || 'groq'}
                       onChange={e => setSettings(prev => ({
                         ...prev,
                         streamingASR: {
-                          ...prev.streamingASR!,
-                          xunfei: {
-                            ...prev.streamingASR?.xunfei,
-                            appId: e.target.value
-                          }
+                          ...prev.streamingASR,
+                          enabled: true,
+                          provider: e.target.value as any,
+                          mode: 'cloud-first'
                         }
                       }))}
-                      placeholder="输入 AppID"
-                    />
+                    >
+                      <option value="aliyun">阿里云 Paraformer</option>
+                      <option value="xunfei">讯飞语音听写</option>
+                      <option value="zhipu">智谱 GLM-4-Voice</option>
+                      <option value="groq">Groq Whisper（复用上方 Groq API Key）</option>
+                      <option value="funasr">FunASR 本地 (离线)</option>
+                    </select>
                   </div>
-                  <div className="form-group">
-                    <label>讯飞 API Key</label>
-                    <input
-                      type="password"
-                      value={settings.streamingASR?.xunfei?.apiKey || ''}
-                      onChange={e => setSettings(prev => ({
-                        ...prev,
-                        streamingASR: {
-                          ...prev.streamingASR!,
-                          xunfei: {
-                            ...prev.streamingASR?.xunfei,
-                            apiKey: e.target.value
+
+                  {/* 阿里云 Paraformer 配置 */}
+                  {settings.streamingASR?.provider === 'aliyun' && (
+                    <>
+                      <div className="form-group">
+                        <label>阿里云 AccessKey ID</label>
+                        <input
+                          type="text"
+                          value={settings.streamingASR?.aliyun?.accessKeyId || ''}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            streamingASR: {
+                              ...prev.streamingASR!,
+                              aliyun: {
+                                ...prev.streamingASR?.aliyun,
+                                accessKeyId: e.target.value
+                              }
+                            }
+                          }))}
+                          placeholder="输入 AccessKey ID"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>阿里云 AccessKey Secret</label>
+                        <input
+                          type="password"
+                          value={settings.streamingASR?.aliyun?.accessKeySecret || ''}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            streamingASR: {
+                              ...prev.streamingASR!,
+                              aliyun: {
+                                ...prev.streamingASR?.aliyun,
+                                accessKeySecret: e.target.value
+                              }
+                            }
+                          }))}
+                          placeholder="输入 AccessKey Secret"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>阿里云 AppKey</label>
+                        <input
+                          type="text"
+                          value={settings.streamingASR?.aliyun?.appKey || ''}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            streamingASR: {
+                              ...prev.streamingASR!,
+                              aliyun: {
+                                ...prev.streamingASR?.aliyun,
+                                appKey: e.target.value
+                              }
+                            }
+                          }))}
+                          placeholder="输入智能语音服务的 AppKey"
+                        />
+                        <span className="help-text">
+                          <a href="https://nls-portal.console.aliyun.com/" target="_blank" rel="noreferrer">阿里云智能语音服务控制台</a>
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* 讯飞语音听写配置 */}
+                  {settings.streamingASR?.provider === 'xunfei' && (
+                    <>
+                      <div className="form-group">
+                        <label>讯飞 AppID</label>
+                        <input
+                          type="text"
+                          value={settings.streamingASR?.xunfei?.appId || ''}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            streamingASR: {
+                              ...prev.streamingASR!,
+                              xunfei: {
+                                ...prev.streamingASR?.xunfei,
+                                appId: e.target.value
+                              }
+                            }
+                          }))}
+                          placeholder="输入 AppID"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>讯飞 API Key</label>
+                        <input
+                          type="password"
+                          value={settings.streamingASR?.xunfei?.apiKey || ''}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            streamingASR: {
+                              ...prev.streamingASR!,
+                              xunfei: {
+                                ...prev.streamingASR?.xunfei,
+                                apiKey: e.target.value
+                              }
+                            }
+                          }))}
+                          placeholder="输入 API Key"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>讯飞 API Secret</label>
+                        <input
+                          type="password"
+                          value={settings.streamingASR?.xunfei?.apiSecret || ''}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            streamingASR: {
+                              ...prev.streamingASR!,
+                              xunfei: {
+                                ...prev.streamingASR?.xunfei,
+                                apiSecret: e.target.value
+                              }
+                            }
+                          }))}
+                          placeholder="输入 API Secret"
+                        />
+                        <span className="help-text">
+                          <a href="https://console.xfyun.cn/services/iat" target="_blank" rel="noreferrer">讯飞开放平台</a>
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* 智谱 GLM-4-Voice 配置 */}
+                  {settings.streamingASR?.provider === 'zhipu' && (
+                    <div className="form-group">
+                      <label>智谱 API Key</label>
+                      <input
+                        type="password"
+                        value={settings.streamingASR?.zhipu?.apiKey || ''}
+                        onChange={e => setSettings(prev => ({
+                          ...prev,
+                          streamingASR: {
+                            ...prev.streamingASR!,
+                            zhipu: {
+                              apiKey: e.target.value
+                            }
                           }
-                        }
-                      }))}
-                      placeholder="输入 API Key"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>讯飞 API Secret</label>
-                    <input
-                      type="password"
-                      value={settings.streamingASR?.xunfei?.apiSecret || ''}
-                      onChange={e => setSettings(prev => ({
-                        ...prev,
-                        streamingASR: {
-                          ...prev.streamingASR!,
-                          xunfei: {
-                            ...prev.streamingASR?.xunfei,
-                            apiSecret: e.target.value
-                          }
-                        }
-                      }))}
-                      placeholder="输入 API Secret"
-                    />
-                    <span className="help-text">
-                      <a href="https://console.xfyun.cn/services/iat" target="_blank" rel="noreferrer">讯飞开放平台</a>
-                    </span>
-                  </div>
+                        }))}
+                        placeholder="输入智谱 API Key"
+                      />
+                      <span className="help-text">
+                        <a href="https://open.bigmodel.cn/" target="_blank" rel="noreferrer">智谱 AI 开放平台</a>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Groq 使用上方已有的 API Key */}
+                  {settings.streamingASR?.provider === 'groq' && (
+                    <div className="form-group">
+                      <p className="help-text" style={{ color: 'var(--text-secondary)' }}>
+                        使用上方已配置的 Groq API Key 进行语音识别。
+                      </p>
+                    </div>
+                  )}
+
+                  {/* FunASR 本地配置 */}
+                  {settings.streamingASR?.provider === 'funasr' && (
+                    <div className="form-group">
+                      <p className="help-text" style={{ color: 'var(--text-secondary)' }}>
+                        FunASR 是本地离线语音识别引擎，无需配置 API Key。请确保已安装 FunASR 服务。
+                      </p>
+                    </div>
+                  )}
                 </>
-              )}
-
-              {/* 智谱 GLM-4-Voice 配置 */}
-              {settings.streamingASR?.provider === 'zhipu' && (
-                <div className="form-group">
-                  <label>智谱 API Key</label>
-                  <input
-                    type="password"
-                    value={settings.streamingASR?.zhipu?.apiKey || ''}
-                    onChange={e => setSettings(prev => ({
-                      ...prev,
-                      streamingASR: {
-                        ...prev.streamingASR!,
-                        zhipu: {
-                          apiKey: e.target.value
-                        }
-                      }
-                    }))}
-                    placeholder="输入智谱 API Key"
-                  />
-                  <span className="help-text">
-                    <a href="https://open.bigmodel.cn/" target="_blank" rel="noreferrer">智谱 AI 开放平台</a>
-                  </span>
-                </div>
-              )}
-
-              {/* Groq 使用上方已有的 API Key */}
-              {settings.streamingASR?.provider === 'groq' && (
-                <div className="form-group">
-                  <p className="help-text" style={{ color: 'var(--text-secondary)' }}>
-                    使用上方已配置的 Groq API Key 进行语音识别。
-                  </p>
-                </div>
-              )}
-
-              {/* FunASR 本地配置 */}
-              {settings.streamingASR?.provider === 'funasr' && (
-                <div className="form-group">
-                  <p className="help-text" style={{ color: 'var(--text-secondary)' }}>
-                    FunASR 是本地离线语音识别引擎，无需配置 API Key。请确保已安装 FunASR 服务。
-                  </p>
-                </div>
               )}
             </div>
 
@@ -1568,7 +1582,6 @@ const Settings: React.FC = () => {
                   value={settings.aiProvider}
                   onChange={e => {
                     const newProvider = e.target.value
-                    // 切换提供商时，清空模型选择，让系统使用默认模型
                     setSettings(prev => ({
                       ...prev,
                       aiProvider: newProvider,

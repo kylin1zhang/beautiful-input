@@ -112,7 +112,8 @@ export interface UserSettings {
   openaiApiKey: string  // OpenAI API Key (用于 Whisper 等服务)
   deepseekApiKey: string
   qwenApiKey: string
-  asrProvider: 'groq' | 'openai' | 'local'  // 语音识别服务提供商选择
+  asrMode: 'normal' | 'streaming'  // 语音识别模式：普通/流式
+  asrProvider: 'groq' | 'openai' | 'local'  // 普通模式下的语音识别提供商
   aiProvider: string  // AI 服务提供商 ID（扩展为支持多种提供商）
   aiModel?: string    // 当前选中的模型 ID
   aiProviders?: AIProviderConfig[]  // 所有提供商配置（可选，用于自定义）
@@ -161,6 +162,7 @@ export const defaultSettings: UserSettings = {
   openaiApiKey: '',
   deepseekApiKey: '',
   qwenApiKey: '',
+  asrMode: 'normal',  // 默认使用普通模式
   asrProvider: 'groq',
   aiProvider: 'deepseek',
   aiModel: 'deepseek-chat',
