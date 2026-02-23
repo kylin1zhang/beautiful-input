@@ -1360,7 +1360,7 @@ const Settings: React.FC = () => {
                   <span className="badge" style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: 'var(--warning-color)', color: '#fff', borderRadius: '4px' }}>实验性</span>
                 </label>
                 <p className="help-text" style={{ marginBottom: '10px' }}>
-                  实时显示识别结果，支持边说边显示。目前支持阿里云 Paraformer、讯飞、智谱、Groq 和本地 FunASR。
+                  实时显示识别结果，支持边说边显示。
                 </p>
                 <select
                   value={settings.streamingASR?.provider || 'groq'}
@@ -1374,13 +1374,178 @@ const Settings: React.FC = () => {
                   <option value="aliyun">阿里云 Paraformer</option>
                   <option value="xunfei">讯飞语音听写</option>
                   <option value="zhipu">智谱 GLM-4-Voice</option>
-                  <option value="groq">Groq Whisper</option>
+                  <option value="groq">Groq Whisper（复用上方 Groq API Key）</option>
                   <option value="funasr">FunASR 本地 (离线)</option>
                 </select>
-                <span className="help-text">
-                  选择流式语音识别服务提供商。需要在上方配置对应的 API Key。
-                </span>
               </div>
+
+              {/* 阿里云 Paraformer 配置 */}
+              {settings.streamingASR?.provider === 'aliyun' && (
+                <>
+                  <div className="form-group">
+                    <label>阿里云 AccessKey ID</label>
+                    <input
+                      type="text"
+                      value={settings.streamingASR?.aliyun?.accessKeyId || ''}
+                      onChange={e => setSettings(prev => ({
+                        ...prev,
+                        streamingASR: {
+                          ...prev.streamingASR!,
+                          aliyun: {
+                            ...prev.streamingASR?.aliyun,
+                            accessKeyId: e.target.value
+                          }
+                        }
+                      }))}
+                      placeholder="输入 AccessKey ID"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>阿里云 AccessKey Secret</label>
+                    <input
+                      type="password"
+                      value={settings.streamingASR?.aliyun?.accessKeySecret || ''}
+                      onChange={e => setSettings(prev => ({
+                        ...prev,
+                        streamingASR: {
+                          ...prev.streamingASR!,
+                          aliyun: {
+                            ...prev.streamingASR?.aliyun,
+                            accessKeySecret: e.target.value
+                          }
+                        }
+                      }))}
+                      placeholder="输入 AccessKey Secret"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>阿里云 AppKey</label>
+                    <input
+                      type="text"
+                      value={settings.streamingASR?.aliyun?.appKey || ''}
+                      onChange={e => setSettings(prev => ({
+                        ...prev,
+                        streamingASR: {
+                          ...prev.streamingASR!,
+                          aliyun: {
+                            ...prev.streamingASR?.aliyun,
+                            appKey: e.target.value
+                          }
+                        }
+                      }))}
+                      placeholder="输入智能语音服务的 AppKey"
+                    />
+                    <span className="help-text">
+                      <a href="https://nls-portal.console.aliyun.com/" target="_blank" rel="noreferrer">阿里云智能语音服务控制台</a>
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {/* 讯飞语音听写配置 */}
+              {settings.streamingASR?.provider === 'xunfei' && (
+                <>
+                  <div className="form-group">
+                    <label>讯飞 AppID</label>
+                    <input
+                      type="text"
+                      value={settings.streamingASR?.xunfei?.appId || ''}
+                      onChange={e => setSettings(prev => ({
+                        ...prev,
+                        streamingASR: {
+                          ...prev.streamingASR!,
+                          xunfei: {
+                            ...prev.streamingASR?.xunfei,
+                            appId: e.target.value
+                          }
+                        }
+                      }))}
+                      placeholder="输入 AppID"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>讯飞 API Key</label>
+                    <input
+                      type="password"
+                      value={settings.streamingASR?.xunfei?.apiKey || ''}
+                      onChange={e => setSettings(prev => ({
+                        ...prev,
+                        streamingASR: {
+                          ...prev.streamingASR!,
+                          xunfei: {
+                            ...prev.streamingASR?.xunfei,
+                            apiKey: e.target.value
+                          }
+                        }
+                      }))}
+                      placeholder="输入 API Key"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>讯飞 API Secret</label>
+                    <input
+                      type="password"
+                      value={settings.streamingASR?.xunfei?.apiSecret || ''}
+                      onChange={e => setSettings(prev => ({
+                        ...prev,
+                        streamingASR: {
+                          ...prev.streamingASR!,
+                          xunfei: {
+                            ...prev.streamingASR?.xunfei,
+                            apiSecret: e.target.value
+                          }
+                        }
+                      }))}
+                      placeholder="输入 API Secret"
+                    />
+                    <span className="help-text">
+                      <a href="https://console.xfyun.cn/services/iat" target="_blank" rel="noreferrer">讯飞开放平台</a>
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {/* 智谱 GLM-4-Voice 配置 */}
+              {settings.streamingASR?.provider === 'zhipu' && (
+                <div className="form-group">
+                  <label>智谱 API Key</label>
+                  <input
+                    type="password"
+                    value={settings.streamingASR?.zhipu?.apiKey || ''}
+                    onChange={e => setSettings(prev => ({
+                      ...prev,
+                      streamingASR: {
+                        ...prev.streamingASR!,
+                        zhipu: {
+                          apiKey: e.target.value
+                        }
+                      }
+                    }))}
+                    placeholder="输入智谱 API Key"
+                  />
+                  <span className="help-text">
+                    <a href="https://open.bigmodel.cn/" target="_blank" rel="noreferrer">智谱 AI 开放平台</a>
+                  </span>
+                </div>
+              )}
+
+              {/* Groq 使用上方已有的 API Key */}
+              {settings.streamingASR?.provider === 'groq' && (
+                <div className="form-group">
+                  <p className="help-text" style={{ color: 'var(--text-secondary)' }}>
+                    使用上方已配置的 Groq API Key 进行语音识别。
+                  </p>
+                </div>
+              )}
+
+              {/* FunASR 本地配置 */}
+              {settings.streamingASR?.provider === 'funasr' && (
+                <div className="form-group">
+                  <p className="help-text" style={{ color: 'var(--text-secondary)' }}>
+                    FunASR 是本地离线语音识别引擎，无需配置 API Key。请确保已安装 FunASR 服务。
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* AI 处理服务模块 */}
