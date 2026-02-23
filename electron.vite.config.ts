@@ -58,7 +58,8 @@ export default defineConfig({
           index: resolve(__dirname, 'src/renderer/index.html'),
           float: resolve(__dirname, 'src/renderer/float.html'),
           settings: resolve(__dirname, 'src/renderer/settings.html'),
-          history: resolve(__dirname, 'src/renderer/history.html')
+          history: resolve(__dirname, 'src/renderer/history.html'),
+          preview: resolve(__dirname, 'src/renderer/preview.html')
         }
       }
     },

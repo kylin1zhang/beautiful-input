@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, shell, Notification } from 'electron'
+import Store from 'electron-store'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { existsSync } from 'fs'
@@ -18,12 +19,15 @@ import { ModelManager } from './modules/model-manager/index.js'
 import { LocalTranscriber } from './modules/local-transcriber/index.js'
 import { providerRegistry } from './modules/ai-processor/registry.js'
 import { localLLMModule } from './modules/local-llm/index.js'
+import { StreamingASRModule } from './modules/streaming-asr/index.js'
+import { PreviewWindow } from './modules/preview-window/index.js'
+import { TermManager } from './modules/term-manager/index.js'
 
 // 服务导入
 import { StoreService } from './services/store.service.js'
 
 // 类型和常量
-import { IpcChannels, UserSettings, LocalModelType, RecordingErrorType, RecordingErrorInfo, AIProviderConfig } from '@shared/types/index.js'
+import { IpcChannels, UserSettings, LocalModelType, RecordingErrorType, RecordingErrorInfo, AIProviderConfig, StreamingASRResult, StreamingASRStatus, StreamingASRError, Term, FloatPosition } from '@shared/types/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -46,6 +50,9 @@ let storeService: StoreService
 let hardwareDetector: HardwareDetector
 let modelManager: ModelManager
 let localTranscriber: LocalTranscriber
+let termManager: TermManager
+let previewWindow: PreviewWindow
+let streamingASR: StreamingASRModule | null = null
 
 // 应用状态
 let isRecording = false
@@ -1149,6 +1156,80 @@ function registerIpcHandlers(): void {
     app.quit()
   })
 
+  // 流式 ASR IPC 处理
+  ipcMain.handle(IpcChannels.STREAMING_ASR_START, async (_, provider?: string) => {
+    try {
+      if (!streamingASR) {
+        const settings = settingsModule.getSettings()
+        streamingASR = new StreamingASRModule({
+          enabled: true,
+          provider: (provider as any) || 'aliyun',
+          mode: 'cloud-first',
+          aliyun: settings.groqApiKey ? undefined : undefined  // TODO: 从设置中读取
+        }, termManager)
+
+        streamingASR.on('result', (result: StreamingASRResult) => {
+          // 更新预览窗口
+          previewWindow.updateText(result.text)
+          // 通知渲染进程
+          floatWindow?.webContents.send(IpcChannels.STREAMING_ASR_TEXT, result)
+        })
+
+        streamingASR.on('status', (status: StreamingASRStatus) => {
+          floatWindow?.webContents.send(IpcChannels.STREAMING_ASR_STATUS, status)
+        })
+
+        streamingASR.on('error', (error: StreamingASRError) => {
+          floatWindow?.webContents.send(IpcChannels.STREAMING_ASR_ERROR, error)
+        })
+      }
+
+      await streamingASR.startStreaming(provider as any)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '启动失败' }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.STREAMING_ASR_STOP, async () => {
+    if (streamingASR) {
+      const text = await streamingASR.stopStreaming()
+      return text
+    }
+    return ''
+  })
+
+  // 预览窗口 IPC 处理
+  ipcMain.handle(IpcChannels.PREVIEW_SHOW, async () => {
+    const floatPosition = storeService.getFloatPosition()
+    previewWindow.show(floatPosition ?? undefined)
+  })
+
+  ipcMain.handle(IpcChannels.PREVIEW_HIDE, async (_, immediate = false) => {
+    previewWindow.hide(immediate)
+  })
+
+  // 术语管理 IPC 处理
+  ipcMain.handle(IpcChannels.TERM_LIST, async () => {
+    return termManager.getAllTerms()
+  })
+
+  ipcMain.handle(IpcChannels.TERM_ADD, async (_, term: string, aliases: string[]) => {
+    return termManager.addTerm(term, aliases)
+  })
+
+  ipcMain.handle(IpcChannels.TERM_UPDATE, async (_, id: string, updates: Partial<Term>) => {
+    return termManager.updateTerm(id, updates)
+  })
+
+  ipcMain.handle(IpcChannels.TERM_DELETE, async (_, id: string) => {
+    return termManager.deleteTerm(id)
+  })
+
+  ipcMain.handle(IpcChannels.TERM_GET_HOTWORDS, async () => {
+    return termManager.getHotwords()
+  })
+
   // 本地模型相关
   ipcMain.handle(IpcChannels.DETECT_HARDWARE, async () => {
     const info = await hardwareDetector.detect()
@@ -1335,6 +1416,10 @@ app.whenReady().then(async () => {
   hardwareDetector = new HardwareDetector()
   modelManager = new ModelManager()
   localTranscriber = new LocalTranscriber()
+
+  // 初始化术语管理和预览窗口
+  termManager = new TermManager(storeService.getStore() as unknown as Store<Record<string, unknown>>)
+  previewWindow = new PreviewWindow()
 
   // 设置 LocalTranscriber 的 ModelManager 引用
   localTranscriber.setModelManager(modelManager)

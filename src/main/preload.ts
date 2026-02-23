@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState, AIProviderConfig, LocalLLMModel, LLMHardwareInfo, LLMDownloadProgress } from '@shared/types'
+import { IpcChannels, UserSettings, HistoryItem, FloatPosition, HardwareInfo, LocalModelInfo, LocalModelType, ModelDownloadState, DiskSpaceInfo, ModelsMigrateState, AIProviderConfig, LocalLLMModel, LLMHardwareInfo, LLMDownloadProgress, StreamingASRResult, StreamingASRStatus, StreamingASRError, Term, PreviewContent } from '@shared/types'
 
 // API 类型定义
 interface BeautifulInputAPI {
@@ -109,6 +109,21 @@ interface BeautifulInputAPI {
   cancelLLMDownload: (modelId: string) => Promise<void>
   deleteLocalLLMModel: (modelId: string) => Promise<boolean>
   onLLMDownloadProgress: (callback: (event: unknown, data: LLMDownloadProgress) => void) => void
+
+  // 预览窗口
+  onPreviewUpdate: (callback: (data: PreviewContent) => void) => void
+  onPreviewFadeOut: (callback: () => void) => void
+
+  // 流式 ASR
+  onStreamingASRText: (callback: (result: StreamingASRResult) => void) => void
+  onStreamingASRStatus: (callback: (status: StreamingASRStatus) => void) => void
+  onStreamingASRError: (callback: (error: StreamingASRError) => void) => void
+
+  // 术语管理
+  getTerms: () => Promise<Term[]>
+  addTerm: (term: string, aliases: string[]) => Promise<Term>
+  updateTerm: (id: string, updates: Partial<Term>) => Promise<Term | null>
+  deleteTerm: (id: string) => Promise<boolean>
 
   // 移除监听器
   removeAllListeners: (channel: string) => void
@@ -223,6 +238,31 @@ const api: BeautifulInputAPI = {
   onLLMDownloadProgress: (callback) => {
     ipcRenderer.on(IpcChannels.LOCAL_LLM_DOWNLOAD_PROGRESS, callback)
   },
+
+  // 预览窗口
+  onPreviewUpdate: (callback) => {
+    ipcRenderer.on('preview-update', (_, data) => callback(data))
+  },
+  onPreviewFadeOut: (callback) => {
+    ipcRenderer.on('preview-fade-out', () => callback())
+  },
+
+  // 流式 ASR
+  onStreamingASRText: (callback) => {
+    ipcRenderer.on(IpcChannels.STREAMING_ASR_TEXT, (_, result) => callback(result))
+  },
+  onStreamingASRStatus: (callback) => {
+    ipcRenderer.on(IpcChannels.STREAMING_ASR_STATUS, (_, status) => callback(status))
+  },
+  onStreamingASRError: (callback) => {
+    ipcRenderer.on(IpcChannels.STREAMING_ASR_ERROR, (_, error) => callback(error))
+  },
+
+  // 术语管理
+  getTerms: () => ipcRenderer.invoke(IpcChannels.TERM_LIST),
+  addTerm: (term, aliases) => ipcRenderer.invoke(IpcChannels.TERM_ADD, term, aliases),
+  updateTerm: (id, updates) => ipcRenderer.invoke(IpcChannels.TERM_UPDATE, id, updates),
+  deleteTerm: (id) => ipcRenderer.invoke(IpcChannels.TERM_DELETE, id),
 
   // 移除监听器
   removeAllListeners: (channel) => {

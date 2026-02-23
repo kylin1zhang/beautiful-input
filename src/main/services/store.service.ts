@@ -150,6 +150,13 @@ export class StoreService {
   }
 
   /**
+   * 获取底层 store 实例（用于其他模块）
+   */
+  getStore(): Store<StoreSchema> {
+    return this.store
+  }
+
+  /**
    * 获取存储大小
    */
   getStoreSize(): number {
