@@ -1230,6 +1230,15 @@ function registerIpcHandlers(): void {
     return termManager.getHotwords()
   })
 
+  // 文字替换相关
+  ipcMain.handle(IpcChannels.GET_SELECTED_TEXT, async () => {
+    return inputSimulatorModule.getSelectedText()
+  })
+
+  ipcMain.handle(IpcChannels.REPLACE_SELECTED_TEXT, async (_, text: string) => {
+    return inputSimulatorModule.replaceSelectedText(text)
+  })
+
   // 本地模型相关
   ipcMain.handle(IpcChannels.DETECT_HARDWARE, async () => {
     const info = await hardwareDetector.detect()

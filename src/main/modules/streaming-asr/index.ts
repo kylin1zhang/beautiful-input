@@ -159,4 +159,5 @@ export class StreamingASRModule extends EventEmitter {
 export { ASRRouter, createProvider } from './router.js'
 export { BaseASRProvider } from './providers/base.js'
 export { AliyunASRProvider } from './providers/aliyun.js'
+export { FunASRProvider } from './providers/funasr.js'
 export type { ASRProviderConfig, ASRCallbacks, AudioChunk } from './types.js'

@@ -1,5 +1,6 @@
 import { BaseASRProvider } from './providers/base.js'
 import { AliyunASRProvider } from './providers/aliyun.js'
+import { FunASRProvider } from './providers/funasr.js'
 import { ASRProviderConfig, ASRCallbacks } from './types.js'
 import { StreamingASRProvider } from '@shared/types'
 
@@ -89,6 +90,8 @@ export function createProvider(
   switch (name) {
     case 'aliyun':
       return new AliyunASRProvider(config, callbacks)
+    case 'funasr':
+      return new FunASRProvider(config, callbacks)
     // 其他提供商在后续任务中添加
     default:
       throw new Error(`不支持的提供商: ${name}`)

@@ -43,12 +43,18 @@ export interface RecordingOptions {
   bitDepth?: number
 }
 
+/** 流式音频数据回调 */
+export type AudioDataCallback = (chunk: Buffer, timestamp: number) => void
+
 export class RecordingModule extends EventEmitter {
   private recordingProcess: ChildProcess | null = null
   private audioChunks: Buffer[] = []
   private isRecording = false
   private options: Required<RecordingOptions>
   private vadModule: VADModule | null = null
+  private streamingCallback: AudioDataCallback | null = null
+  private streamingInterval: NodeJS.Timeout | null = null
+  private streamingChunkDuration: number = 600  // 默认 600ms 一块
 
   constructor(options: RecordingOptions = {}) {
     super()
@@ -56,6 +62,17 @@ export class RecordingModule extends EventEmitter {
       sampleRate: options.sampleRate ?? 16000,
       channels: options.channels ?? 1,
       bitDepth: options.bitDepth ?? 16
+    }
+  }
+
+  /**
+   * 设置流式音频回调
+   * 用于实时发送音频数据到 ASR 引擎
+   */
+  setStreamingCallback(callback: AudioDataCallback | null, chunkDurationMs?: number): void {
+    this.streamingCallback = callback
+    if (chunkDurationMs) {
+      this.streamingChunkDuration = chunkDurationMs
     }
   }
 
@@ -453,9 +470,34 @@ export class RecordingModule extends EventEmitter {
       return
     }
 
+    // 流式音频缓冲区
+    let streamingBuffer: Buffer[] = []
+    let lastSendTime = Date.now()
+
+    // 定期发送流式音频数据
+    const flushStreamingBuffer = () => {
+      if (streamingBuffer.length > 0 && this.streamingCallback) {
+        const chunk = Buffer.concat(streamingBuffer)
+        streamingBuffer = []
+        this.streamingCallback(chunk, Date.now())
+      }
+    }
+
+    // 启动定时器定期发送数据
+    if (this.streamingCallback) {
+      this.streamingInterval = setInterval(() => {
+        flushStreamingBuffer()
+      }, this.streamingChunkDuration)
+    }
+
     this.recordingProcess.stdout?.on('data', (chunk: Buffer) => {
       this.audioChunks.push(chunk)
       this.emit('data', chunk)
+
+      // 如果设置了流式回调，累积数据
+      if (this.streamingCallback) {
+        streamingBuffer.push(chunk)
+      }
 
       // 如果启用了 VAD，持续处理音频数据
       if (this.vadModule) {
@@ -474,12 +516,22 @@ export class RecordingModule extends EventEmitter {
     this.recordingProcess.on('error', (error) => {
       console.error('[Recording] 进程错误:', error)
       this.isRecording = false
+      if (this.streamingInterval) {
+        clearInterval(this.streamingInterval)
+        this.streamingInterval = null
+      }
       reject(error)
     })
 
     this.recordingProcess.on('exit', (code) => {
       if (code !== 0 && code !== null && this.isRecording) {
         console.error(`[Recording] 进程异常退出，代码: ${code}`)
+      }
+      // 在退出前发送剩余的流式数据
+      flushStreamingBuffer()
+      if (this.streamingInterval) {
+        clearInterval(this.streamingInterval)
+        this.streamingInterval = null
       }
       this.isRecording = false
       this.emit('stopped')
@@ -501,6 +553,12 @@ export class RecordingModule extends EventEmitter {
   async stopRecording(): Promise<Buffer> {
     if (!this.isRecording || !this.recordingProcess) {
       throw new Error('没有正在进行的录音')
+    }
+
+    // 清理流式相关资源
+    if (this.streamingInterval) {
+      clearInterval(this.streamingInterval)
+      this.streamingInterval = null
     }
 
     return new Promise((resolve, reject) => {
@@ -564,6 +622,11 @@ export class RecordingModule extends EventEmitter {
       this.vadModule.removeAllListeners()
       this.vadModule = null
     }
+    if (this.streamingInterval) {
+      clearInterval(this.streamingInterval)
+      this.streamingInterval = null
+    }
+    this.streamingCallback = null
     this.removeAllListeners()
   }
 }

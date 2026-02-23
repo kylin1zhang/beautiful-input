@@ -138,4 +138,102 @@ export class InputSimulatorModule extends EventEmitter {
     }
     return 'Unknown'
   }
+
+  /**
+   * 获取当前选中的文本
+   * 通过模拟 Ctrl+C 复制操作来获取
+   */
+  async getSelectedText(): Promise<string> {
+    if (platform() !== 'win32') {
+      console.log('[Input Simulator] 非 Windows 平台，暂不支持获取选中文本')
+      return ''
+    }
+
+    try {
+      const { execSync } = require('child_process')
+
+      // 保存原始剪贴板内容
+      const originalClipboard = clipboard.readText()
+      console.log('[Input Simulator] 保存原始剪贴板，长度:', originalClipboard.length)
+
+      // 清空剪贴板
+      clipboard.writeText('')
+
+      // 模拟 Ctrl+C 复制
+      execSync('powershell -Command "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys(\'^(c)\')"', { timeout: 3000 })
+
+      // 等待复制操作完成
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      // 读取剪贴板内容
+      const selectedText = clipboard.readText()
+      console.log('[Input Simulator] 获取到选中文本，长度:', selectedText.length)
+
+      // 恢复原始剪贴板内容
+      clipboard.writeText(originalClipboard)
+
+      return selectedText
+    } catch (error) {
+      console.error('[Input Simulator] 获取选中文本失败:', error)
+      return ''
+    }
+  }
+
+  /**
+   * 替换当前选中的文本
+   * 通过模拟 Ctrl+V 粘贴操作来替换
+   */
+  async replaceSelectedText(text: string): Promise<boolean> {
+    if (platform() !== 'win32') {
+      console.log('[Input Simulator] 非 Windows 平台，暂不支持替换选中文本')
+      return false
+    }
+
+    if (this.isTyping) {
+      console.warn('[Input Simulator] 正在输入中，请稍后再试')
+      return false
+    }
+
+    this.isTyping = true
+
+    try {
+      const { execSync } = require('child_process')
+
+      // 保存原始剪贴板内容
+      const originalClipboard = clipboard.readText()
+      console.log('[Input Simulator] 替换选中文本，新文本长度:', text.length)
+
+      // 写入新文本到剪贴板
+      clipboard.writeText(text)
+
+      // 等待剪贴板写入完成
+      await new Promise(resolve => setTimeout(resolve, 200))
+
+      // 模拟 Ctrl+V 粘贴（会替换选中的文本）
+      execSync('powershell -Command "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys(\'^(v)\')"', { timeout: 3000 })
+
+      // 等待粘贴操作完成
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // 恢复原始剪贴板内容
+      await new Promise(resolve => setTimeout(resolve, 100))
+      clipboard.writeText(originalClipboard)
+      console.log('[Input Simulator] 已恢复原始剪贴板内容')
+
+      return true
+    } catch (error) {
+      console.error('[Input Simulator] 替换选中文本失败:', error)
+      return false
+    } finally {
+      this.isTyping = false
+    }
+  }
+
+  /**
+   * 检查是否有选中文本
+   */
+  async hasSelectedText(): Promise<boolean> {
+    const text = await this.getSelectedText()
+    return text.length > 0
+  }
 }

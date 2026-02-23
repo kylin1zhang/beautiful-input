@@ -125,6 +125,10 @@ interface BeautifulInputAPI {
   updateTerm: (id: string, updates: Partial<Term>) => Promise<Term | null>
   deleteTerm: (id: string) => Promise<boolean>
 
+  // 文字替换
+  getSelectedText: () => Promise<string>
+  replaceSelectedText: (text: string) => Promise<boolean>
+
   // 移除监听器
   removeAllListeners: (channel: string) => void
 }
@@ -263,6 +267,10 @@ const api: BeautifulInputAPI = {
   addTerm: (term, aliases) => ipcRenderer.invoke(IpcChannels.TERM_ADD, term, aliases),
   updateTerm: (id, updates) => ipcRenderer.invoke(IpcChannels.TERM_UPDATE, id, updates),
   deleteTerm: (id) => ipcRenderer.invoke(IpcChannels.TERM_DELETE, id),
+
+  // 文字替换
+  getSelectedText: () => ipcRenderer.invoke(IpcChannels.GET_SELECTED_TEXT),
+  replaceSelectedText: (text) => ipcRenderer.invoke(IpcChannels.REPLACE_SELECTED_TEXT, text),
 
   // 移除监听器
   removeAllListeners: (channel) => {
