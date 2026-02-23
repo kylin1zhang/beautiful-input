@@ -372,7 +372,35 @@ export enum IpcChannels {
   DETECT_LLM_HARDWARE = 'detect-llm-hardware',
   START_LOCAL_LLM = 'start-local-llm',
   STOP_LOCAL_LLM = 'stop-local-llm',
-  CANCEL_LLM_DOWNLOAD = 'cancel-llm-download'
+  CANCEL_LLM_DOWNLOAD = 'cancel-llm-download',
+
+  // 流式 ASR
+  STREAMING_ASR_START = 'streaming-asr:start',
+  STREAMING_ASR_STOP = 'streaming-asr:stop',
+  STREAMING_ASR_TEXT = 'streaming-asr:text',
+  STREAMING_ASR_STATUS = 'streaming-asr:status',
+  STREAMING_ASR_ERROR = 'streaming-asr:error',
+
+  // 预览窗口
+  PREVIEW_SHOW = 'preview:show',
+  PREVIEW_HIDE = 'preview:hide',
+  PREVIEW_UPDATE_TEXT = 'preview:update-text',
+  PREVIEW_SET_STATUS = 'preview:set-status',
+
+  // 术语管理
+  TERM_LIST = 'term:list',
+  TERM_ADD = 'term:add',
+  TERM_UPDATE = 'term:update',
+  TERM_DELETE = 'term:delete',
+  TERM_GET_HOTWORDS = 'term:get-hotwords',
+
+  // 文字替换
+  GET_SELECTED_TEXT = 'get:selected-text',
+  REPLACE_SELECTED_TEXT = 'replace:selected-text',
+
+  // 环境检测
+  CHECK_MICROPHONE = 'check-microphone',
+  CHECK_NETWORK = 'check-network'
 }
 
 // 支持的语言列表
@@ -457,4 +485,72 @@ export interface ModelsMigrateState {
   progress: number  // 0-100
   currentFile?: string
   error?: string
+}
+
+// ===== 流式 ASR 相关类型 =====
+
+/** 流式 ASR 提供商类型 */
+export type StreamingASRProvider = 'aliyun' | 'zhipu' | 'xunfei' | 'groq' | 'funasr'
+
+/** 流式 ASR 配置 */
+export interface StreamingASRConfig {
+  enabled: boolean
+  provider: StreamingASRProvider
+  mode: 'cloud-first' | 'local-first' | 'local-only'
+  // 云端配置
+  aliyun?: {
+    accessKeyId?: string
+    accessKeySecret?: string
+    appKey?: string
+  }
+  zhipu?: {
+    apiKey?: string
+  }
+  xunfei?: {
+    appId?: string
+    apiKey?: string
+    apiSecret?: string
+  }
+  // 本地 FunASR 配置
+  funasr?: {
+    enabled: boolean
+    modelPath?: string
+  }
+}
+
+/** 流式 ASR 识别结果 */
+export interface StreamingASRResult {
+  text: string
+  isFinal: boolean
+  confidence?: number
+  timestamp: number
+}
+
+/** 流式 ASR 状态 */
+export type StreamingASRStatus = 'idle' | 'connecting' | 'connected' | 'recognizing' | 'error'
+
+/** 流式 ASR 错误 */
+export interface StreamingASRError {
+  code: string
+  message: string
+  provider?: StreamingASRProvider
+}
+
+/** 术语项 */
+export interface Term {
+  id: string
+  term: string          // 正确术语，如 "Gemini"
+  aliases: string[]     // 常见误读，如 ["杰米尼", "吉米尼"]
+  source: 'auto' | 'manual'  // 来源：自动学习 / 手动添加
+  usageCount: number    // 使用次数（用于排序）
+  createdAt: number
+  updatedAt: number
+}
+
+/** 预览窗口内容 */
+export interface PreviewContent {
+  text: string
+  status: 'recording' | 'processing' | 'success' | 'error'
+  statusText?: string
+  isReplaceMode?: boolean  // 是否为替换模式
 }
