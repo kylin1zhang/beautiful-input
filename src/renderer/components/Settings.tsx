@@ -329,7 +329,7 @@ const Settings: React.FC = () => {
     return () => {
       window.electronAPI.removeAllListeners('model-download-progress')
       window.electronAPI.removeAllListeners('models-migrate-progress')
-      if (window.electronAPI?.onLLMDownloadProgress) {
+      if (typeof window.electronAPI?.onLLMDownloadProgress === 'function') {
         window.electronAPI.removeAllListeners('local-llm-download-progress')
       }
     }
@@ -1351,6 +1351,36 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* 流式语音识别（实验性） */}
+              <div className="form-group" style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
+                <label>
+                  <Volume2 className="label-icon" />
+                  流式语音识别
+                  <span className="badge" style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: 'var(--warning-color)', color: '#fff', borderRadius: '4px' }}>实验性</span>
+                </label>
+                <p className="help-text" style={{ marginBottom: '10px' }}>
+                  实时显示识别结果，支持边说边显示。目前支持阿里云 Paraformer、讯飞、智谱、Groq 和本地 FunASR。
+                </p>
+                <select
+                  value={settings.streamingASR?.provider || 'groq'}
+                  onChange={e => updateSetting('streamingASR', {
+                    ...settings.streamingASR,
+                    enabled: true,
+                    provider: e.target.value as any,
+                    mode: 'cloud-first'
+                  })}
+                >
+                  <option value="aliyun">阿里云 Paraformer</option>
+                  <option value="xunfei">讯飞语音听写</option>
+                  <option value="zhipu">智谱 GLM-4-Voice</option>
+                  <option value="groq">Groq Whisper</option>
+                  <option value="funasr">FunASR 本地 (离线)</option>
+                </select>
+                <span className="help-text">
+                  选择流式语音识别服务提供商。需要在上方配置对应的 API Key。
+                </span>
+              </div>
             </div>
 
             {/* AI 处理服务模块 */}

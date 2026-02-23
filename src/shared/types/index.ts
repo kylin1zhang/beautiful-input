@@ -148,6 +148,9 @@ export interface UserSettings {
   // 本地模型配置
   localModel: LocalModelSettings
 
+  // 流式 ASR 配置
+  streamingASR?: StreamingASRConfig
+
   // 硬件检测结果缓存
   hardwareInfo?: HardwareInfo
 }
@@ -190,6 +193,11 @@ export const defaultSettings: UserSettings = {
     language: 'auto',
     threads: 4,
     useGpu: true
+  },
+  streamingASR: {
+    enabled: false,
+    provider: 'groq',
+    mode: 'cloud-first'
   },
   hardwareInfo: undefined
 }
