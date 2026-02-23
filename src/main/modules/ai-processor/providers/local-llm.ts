@@ -22,17 +22,29 @@ export class LocalLLMProvider extends BaseAIProvider {
     console.log('[LocalLLMProvider] 收到处理请求')
     console.log('[LocalLLMProvider] request.model:', request.model)
 
+    // 验证模型 ID 是否有效（属于本地模型列表）
+    const validModelIds = LOCAL_LLM_MODELS.map(m => m.id)
+    let modelId = request.model
+
+    if (!modelId || !validModelIds.includes(modelId)) {
+      // 如果模型 ID 无效，使用推荐的默认模型
+      const defaultModel = LOCAL_LLM_MODELS.find(m => m.recommended) || LOCAL_LLM_MODELS[0]
+      modelId = defaultModel.id
+      console.log(`[LocalLLMProvider] 模型 ID 无效或为空，使用默认模型: ${modelId}`)
+      console.log(`[LocalLLMProvider] 可用的本地模型: ${validModelIds.join(', ')}`)
+    }
+
     try {
       // 确保服务已启动
-      console.log('[LocalLLMProvider] 尝试启动服务，模型:', request.model)
-      const port = await localLLMModule.startServer(request.model)
+      console.log('[LocalLLMProvider] 尝试启动服务，模型:', modelId)
+      const port = await localLLMModule.startServer(modelId)
       console.log('[LocalLLMProvider] 服务已启动，端口:', port)
 
       // 通过 OpenAI 兼容接口调用
       const response = await axios.post(
         `http://localhost:${port}/v1/chat/completions`,
         {
-          model: request.model,
+          model: modelId,
           messages: [
             {
               role: 'system',

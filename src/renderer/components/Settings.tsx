@@ -1882,18 +1882,18 @@ const Settings: React.FC = () => {
                     <input
                       type="range"
                       min="0.005"
-                      max="0.03"
-                      step="0.001"
-                      value={settings.autoStopRecording.vadSilenceThreshold ?? 0.008}
+                      max="0.10"
+                      step="0.005"
+                      value={settings.autoStopRecording.vadSilenceThreshold ?? 0.03}
                       onChange={e => updateSetting('autoStopRecording', {
                         ...settings.autoStopRecording,
                         vadSilenceThreshold: parseFloat(e.target.value)
                       })}
                     />
-                    <span>{settings.autoStopRecording.vadSilenceThreshold ?? 0.008}</span>
+                    <span>{settings.autoStopRecording.vadSilenceThreshold ?? 0.03}</span>
                   </div>
                   <span className="help-text">
-                    数值越小越灵敏，但可能误判环境噪音。建议范围：0.006-0.025，当前默认：0.008
+                    数值越小越灵敏。如果录音经常被误切断，请调大此值。建议：0.02-0.05
                   </span>
                 </div>
               </>

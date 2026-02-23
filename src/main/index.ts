@@ -466,6 +466,7 @@ async function startRecording(): Promise<void> {
     // 获取自动停止配置
     const autoStopConfig = settings.autoStopRecording || { enabled: false, vadSilenceDuration: 5000 }
     const enableVAD = autoStopConfig.enabled
+    console.log('[Main] VAD 配置:', JSON.stringify(autoStopConfig))
 
     // 直接开始录音，不再预先检测权限
     // 如果权限问题导致录音失败，会在 catch 中处理
@@ -1341,6 +1342,22 @@ app.whenReady().then(async () => {
   // 从设置中读取自定义模型路径（Whisper 和 LLM 共用）
   const settings = settingsModule.getSettings()
   console.log('[Main] 设置中的 customModelsPath:', settings.localModel?.customModelsPath)
+
+  // 迁移：修复 VAD 设置（旧版本默认太敏感，导致录音容易中断）
+  if (settings.autoStopRecording?.enabled &&
+      (settings.autoStopRecording.vadSilenceThreshold ?? 0) < 0.025) {
+    const newThreshold = 0.03
+    const newDuration = Math.max(settings.autoStopRecording.vadSilenceDuration || 3500, 5000)
+    console.log(`[Main] 迁移 VAD 设置：阈值 ${settings.autoStopRecording.vadSilenceThreshold} -> ${newThreshold}, 时长 -> ${newDuration}ms`)
+    settingsModule.setSettings({
+      autoStopRecording: {
+        enabled: true,
+        vadSilenceDuration: newDuration,
+        vadSilenceThreshold: newThreshold
+      }
+    })
+  }
+
   if (settings.localModel?.customModelsPath) {
     modelManager.setCustomPath(settings.localModel.customModelsPath)
     localLLMModule.setCustomBasePath(settings.localModel.customModelsPath)
@@ -1410,6 +1427,26 @@ app.whenReady().then(async () => {
     }
   })
 
+  // 自动启动本地 LLM（如果用户选择了本地 LLM 作为 AI 提供商）
+  if (settings.aiProvider === 'local') {
+    // 检查是否有已下载的模型
+    const llmModels = localLLMModule.getBuiltinModels()
+    const downloadedModel = llmModels.find(m => m.downloaded)
+
+    if (downloadedModel) {
+      console.log('[Main] 检测到本地 LLM 设置，自动启动服务...')
+      localLLMModule.startServer(downloadedModel.id)
+        .then(port => {
+          console.log(`[Main] 本地 LLM 服务已自动启动，端口: ${port}`)
+        })
+        .catch(err => {
+          console.error('[Main] 本地 LLM 自动启动失败:', err.message)
+        })
+    } else {
+      console.log('[Main] 本地 LLM 模型未下载，请先在设置中下载模型')
+    }
+  }
+
   // 注册全局快捷键
   shortcutsModule.registerAll(settings.shortcuts, {
     toggleRecording,
@@ -1435,6 +1472,8 @@ app.on('will-quit', () => {
   // 注销所有快捷键
   shortcutsModule.unregisterAll()
   globalShortcut.unregisterAll()
+  // 停止本地 LLM 服务
+  localLLMModule.stopServer()
 })
 
 /**

@@ -180,9 +180,9 @@ export const defaultSettings: UserSettings = {
   floatOpacity: 0.9,
   historyRetentionDays: 30,
   autoStopRecording: {
-    enabled: true,
-    vadSilenceDuration: 3500,  // 默认 3.5 秒
-    vadSilenceThreshold: 0.008  // 默认值，建议范围：0.006-0.025
+    enabled: false,  // 默认禁用，避免误切断录音
+    vadSilenceDuration: 5000,  // 默认 5 秒（更宽容）
+    vadSilenceThreshold: 0.03  // 提高默认阈值，减少误检测
   },
   localModel: {
     enabled: false,
